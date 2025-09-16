@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Label from PDF Brady{% endblock %}</title>
+    <link rel="stylesheet" href="{% load static %}{% static 'css/style.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="nav">
+                <div class="nav-left">
+                    <span class="brand-text">Stitch Design</span>
+                    <h1 class="title">
+                        <a href="{% url 'app:home' %}">Label from PDF Brady</a>
+                    </h1>
+                </div>
+                <div class="nav-right">
+                    <nav class="nav-links">
+                        <a href="{% url 'app:home' %}">Home</a>
+                        <a href="#about">About</a>
+                        <a href="#contact">Contact</a>
+                        <button class="help-btn">?</button>
+                    </nav>
+                    <div class="user-avatar">
+                        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='20' fill='%23e0e0e0'/%3E%3Ctext x='20' y='25' text-anchor='middle' font-family='Arial' font-size='14' fill='%23666'%3EU%3C/text%3E%3C/svg%3E" alt="User Avatar">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="main">
+        <div class="container">
+            {% if messages %}
+                <div class="messages">
+                    {% for message in messages %}
+                        <div class="message message-{{ message.tags }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            {% block content %}
+            {% endblock %}
+        </div>
+    </main>
+
+    <script src="{% load static %}{% static 'js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

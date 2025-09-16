@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="home-container">
+    <div class="welcome-section">
+        <h2 class="page-title">Welcome to Label from PDF Brady</h2>
+        <p class="subtitle">Upload your PDF and print specific pages by entering barcode numbers</p>
+    </div>
+    
+    <div class="action-cards">
+        <div class="card upload-card">
+            <div class="card-icon">📄</div>
+            <h3>Upload PDF</h3>
+            <p>Upload your PDF document containing labeled pages with barcodes</p>
+            <a href="{% url 'app:upload' %}" class="card-btn">Upload PDF</a>
+        </div>
+        
+        <div class="card search-card">
+            <div class="card-icon">🔍</div>
+            <h3>Search & Print</h3>
+            <p>Enter a barcode number to find and print the corresponding page</p>
+            <a href="{% url 'app:search' %}" class="card-btn">Search Barcode</a>
+        </div>
+    </div>
+    
+    {% if recent_documents %}
+    <div class="recent-section">
+        <h3>Recent Documents</h3>
+        <div class="document-list">
+            {% for doc in recent_documents %}
+            <div class="document-item">
+                <div class="doc-info">
+                    <span class="doc-name">{{ doc.name }}</span>
+                    <span class="doc-pages">{{ doc.total_pages }} pages</span>
+                    <span class="doc-date">{{ doc.uploaded_at|date:"M d, Y" }}</span>
+                </div>
+                <div class="doc-status">
+                    {% if doc.processed %}
+                        <span class="status-ready">✓ Ready</span>
+                    {% else %}
+                        <span class="status-processing">⏳ Processing</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
