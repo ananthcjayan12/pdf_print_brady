@@ -202,26 +202,16 @@ def search_barcode_ajax(request):
 
 @require_http_methods(["POST"])
 def print_page_ajax(request):
-    """Handle print page request"""
+    """Handle print page request - simplified to just return the page URL"""
     try:
         data = json.loads(request.body)
         mapping_id = data.get('mapping_id')
-        paper_size = data.get('paper_size', 'A4')
-        copies = data.get('copies', 1)
         
         if not mapping_id:
             return JsonResponse({
                 'success': False,
                 'error': 'No page specified for printing'
             })
-        
-        # Validate copies
-        try:
-            copies = int(copies)
-            if copies < 1 or copies > 100:
-                copies = 1
-        except (ValueError, TypeError):
-            copies = 1
         
         # Get the barcode mapping
         try:
@@ -232,23 +222,21 @@ def print_page_ajax(request):
                 'error': 'Page not found'
             })
         
-        # Create print job
+        # Create print job record for tracking purposes
         print_job = PrintJob.objects.create(
             barcode_mapping=mapping,
-            paper_size=paper_size,
-            copies=copies,
-            status='pending'
+            status='completed'  # Mark as completed immediately
         )
         
-        # TODO: Implement actual printing logic here
-        # For now, we'll just mark it as completed
-        print_job.status = 'completed'
-        print_job.save()
+        # Generate the URL to the PDF page that can be opened in a new window for printing
+        from django.urls import reverse
+        pdf_url = request.build_absolute_uri(reverse('app:serve_pdf_page', args=[mapping_id]))
         
         return JsonResponse({
             'success': True,
             'job_id': print_job.id,
-            'message': f'Print job created for {copies} copies of page {mapping.page_number}'
+            'pdf_url': pdf_url,
+            'message': f'Page {mapping.page_number} ready for printing'
         })
     
     except json.JSONDecodeError:

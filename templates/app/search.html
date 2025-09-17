@@ -24,36 +24,14 @@
     </div>
     
     <div class="print-settings">
-        <h3>Print Settings</h3>
+        <h3>Print Options</h3>
         
-        <div class="settings-grid">
-            <div class="setting-group">
-                <label for="paperSize">Paper Size</label>
-                <select id="paperSize" name="paper_size" class="setting-select">
-                    <option value="A4" selected>A4</option>
-                    <option value="A3">A3</option>
-                    <option value="Letter">Letter</option>
-                    <option value="Legal">Legal</option>
-                </select>
-            </div>
-            
-            <div class="setting-group">
-                <label for="copies">Copies</label>
-                <input 
-                    type="number" 
-                    id="copies" 
-                    name="copies" 
-                    value="1" 
-                    min="1" 
-                    max="100"
-                    class="setting-input"
-                >
-            </div>
+        <div class="print-actions">
+            <button type="submit" class="print-btn" id="printBtn" form="searchForm">
+                View & Print PDF
+            </button>
+            <p class="print-note">Click to view the page as PDF and print from your browser</p>
         </div>
-        
-        <button type="submit" class="print-btn" id="printBtn" form="searchForm">
-            Print
-        </button>
     </div>
     
     <div class="search-results" id="searchResults" style="display: none;">

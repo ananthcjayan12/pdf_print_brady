@@ -1,0 +1,583 @@
+services:
+  backend:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:8000/api/method/ping'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    environment:
+      DB_HOST: db
+      DB_PORT: '3306'
+      MYSQL_ROOT_PASSWORD: admin
+      MARIADB_ROOT_PASSWORD: admin
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: backend-hcok8w8wwow4c008o0k8wg4g-055359824335
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+    container_name: backend-hcok8w8wwow4c008o0k8wg4g-055359824335
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=backend-hcok8w8wwow4c008o0k8wg4g-055359824335
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+  configurator:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: none
+    entrypoint:
+      - bash
+      - '-c'
+    command:
+      - "ls -1 apps > sites/apps.txt; bench set-config -g db_host $$DB_HOST; bench set-config -gp db_port $$DB_PORT; bench set-config -g redis_cache \"redis://$$REDIS_CACHE\"; bench set-config -g redis_queue \"redis://$$REDIS_QUEUE\"; bench set-config -g redis_socketio \"redis://$$REDIS_QUEUE\"; bench set-config -gp socketio_port $$SOCKETIO_PORT;\n"
+    environment:
+      DB_HOST: db
+      DB_PORT: '3306'
+      REDIS_CACHE: 'redis-cache:6379'
+      REDIS_QUEUE: 'redis-queue:6379'
+      SOCKETIO_PORT: '9000'
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: configurator-hcok8w8wwow4c008o0k8wg4g-055359858608
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    container_name: configurator-hcok8w8wwow4c008o0k8wg4g-055359858608
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=configurator-hcok8w8wwow4c008o0k8wg4g-055359858608
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+  create-site:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: none
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    entrypoint:
+      - bash
+      - '-c'
+    command:
+      - "wait-for-it -t 120 db:3306; wait-for-it -t 120 redis-cache:6379; wait-for-it -t 120 redis-queue:6379; export start=`date +%s`; until [[ -n `grep -hs ^ sites/common_site_config.json | jq -r \".db_host // empty\"` ]] && \\\n  [[ -n `grep -hs ^ sites/common_site_config.json | jq -r \".redis_cache // empty\"` ]] && \\\n  [[ -n `grep -hs ^ sites/common_site_config.json | jq -r \".redis_queue // empty\"` ]];\ndo\n  echo \"Waiting for sites/common_site_config.json to be created\";\n  sleep 5;\n  if (( `date +%s`-start > 120 )); then\n    echo \"could not find sites/common_site_config.json with required keys\";\n    exit 1\n  fi\ndone; echo \"sites/common_site_config.json found\"; bench new-site --mariadb-user-host-login-scope='%' --admin-password=admin --db-root-username=root --db-root-password=admin --install-app erpnext --install-app rental_management  --install-app print_designer --set-default frontend;\n"
+    container_name: create-site-hcok8w8wwow4c008o0k8wg4g-055359874727
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=create-site-hcok8w8wwow4c008o0k8wg4g-055359874727
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: create-site-hcok8w8wwow4c008o0k8wg4g-055359874727
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  db:
+    image: 'mariadb:10.6'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    healthcheck:
+      test: 'mysqladmin ping -h localhost --password=admin'
+      interval: 1s
+      retries: 20
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - '--character-set-server=utf8mb4'
+      - '--collation-server=utf8mb4_unicode_ci'
+      - '--skip-character-set-client-handshake'
+      - '--skip-innodb-read-only-compressed'
+    environment:
+      MYSQL_ROOT_PASSWORD: admin
+      MARIADB_ROOT_PASSWORD: admin
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: db-hcok8w8wwow4c008o0k8wg4g-055359888547
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_db-data:/var/lib/mysql'
+    container_name: db-hcok8w8wwow4c008o0k8wg4g-055359888547
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=db-hcok8w8wwow4c008o0k8wg4g-055359888547
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+  frontend:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    depends_on:
+      - websocket
+    restart: unless-stopped
+    command:
+      - nginx-entrypoint.sh
+    environment:
+      BACKEND: 'backend:8000'
+      FRAPPE_SITE_NAME_HEADER: frontend
+      SOCKETIO: 'websocket:9000'
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: 'off'
+      PROXY_READ_TIMEOUT: 300
+      CLIENT_MAX_BODY_SIZE: 50m
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: frontend-hcok8w8wwow4c008o0k8wg4g-055359919454
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      COOLIFY_URL: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      COOLIFY_FQDN: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:8080/api/method/ping'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+      -
+        type: tmpfs
+        target: /run
+        tmpfs:
+          size: 100m
+      -
+        type: tmpfs
+        target: /var/cache/nginx
+        tmpfs:
+          size: 100m
+    ports:
+      - '8301:8080'
+    user: '0:0'
+    container_name: frontend-hcok8w8wwow4c008o0k8wg4g-055359919454
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=frontend-hcok8w8wwow4c008o0k8wg4g-055359919454
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+      - traefik.enable=true
+      - traefik.http.middlewares.gzip.compress=true
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.http-0-hcok8w8wwow4c008o0k8wg4g-frontend.entryPoints=http
+      - traefik.http.routers.http-0-hcok8w8wwow4c008o0k8wg4g-frontend.middlewares=gzip
+      - 'traefik.http.routers.http-0-hcok8w8wwow4c008o0k8wg4g-frontend.rule=Host(`gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io`) && PathPrefix(`/`)'
+      - 'caddy_0.encode=zstd gzip'
+      - 'caddy_0.handle_path.0_reverse_proxy={{upstreams}}'
+      - 'caddy_0.handle_path=/*'
+      - caddy_0.header=-Server
+      - 'caddy_0.try_files={path} /index.html /index.php'
+      - 'caddy_0=http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      - caddy_ingress_network=hcok8w8wwow4c008o0k8wg4g
+  queue-long:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - '--queue'
+      - 'long,default,short'
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    container_name: queue-long-hcok8w8wwow4c008o0k8wg4g-055359985013
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=queue-long-hcok8w8wwow4c008o0k8wg4g-055359985013
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: queue-long-hcok8w8wwow4c008o0k8wg4g-055359985013
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  queue-short:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - worker
+      - '--queue'
+      - 'short,default'
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    container_name: queue-short-hcok8w8wwow4c008o0k8wg4g-055400034399
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=queue-short-hcok8w8wwow4c008o0k8wg4g-055400034399
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: queue-short-hcok8w8wwow4c008o0k8wg4g-055400034399
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  redis-queue:
+    image: 'redis:6.2-alpine'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_redis-queue-data:/data'
+    container_name: redis-queue-hcok8w8wwow4c008o0k8wg4g-055400090396
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=redis-queue-hcok8w8wwow4c008o0k8wg4g-055400090396
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: redis-queue-hcok8w8wwow4c008o0k8wg4g-055400090396
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  redis-cache:
+    image: 'redis:6.2-alpine'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+    container_name: redis-cache-hcok8w8wwow4c008o0k8wg4g-055400111282
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=redis-cache-hcok8w8wwow4c008o0k8wg4g-055400111282
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: redis-cache-hcok8w8wwow4c008o0k8wg4g-055400111282
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  scheduler:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+    command:
+      - bench
+      - schedule
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    container_name: scheduler-hcok8w8wwow4c008o0k8wg4g-055400118312
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=scheduler-hcok8w8wwow4c008o0k8wg4g-055400118312
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: scheduler-hcok8w8wwow4c008o0k8wg4g-055400118312
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+  websocket:
+    image: 'ghcr.io/ananthcjayan12/frappe-custom-rental:v39'
+    networks:
+      frappe_network: null
+      hcok8w8wwow4c008o0k8wg4g: null
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 5
+        window: 120s
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - '-f'
+        - 'http://localhost:9000/socket.io/'
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command:
+      - node
+      - /home/frappe/frappe-bench/apps/frappe/socketio.js
+    volumes:
+      - 'hcok8w8wwow4c008o0k8wg4g_sites:/home/frappe/frappe-bench/sites'
+      - 'hcok8w8wwow4c008o0k8wg4g_logs:/home/frappe/frappe-bench/logs'
+    container_name: websocket-hcok8w8wwow4c008o0k8wg4g-055400133465
+    restart: unless-stopped
+    labels:
+      - coolify.managed=true
+      - coolify.version=4.0.0-beta.428
+      - coolify.applicationId=28
+      - coolify.type=application
+      - coolify.name=websocket-hcok8w8wwow4c008o0k8wg4g-055400133465
+      - coolify.resourceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.projectName=rental-genie
+      - coolify.serviceName=ananthcjayan12frappe-dockermain-wg0g4wcwcg4o0okoos40w8ow
+      - coolify.environmentName=production
+      - coolify.pullRequestId=0
+    environment:
+      COOLIFY_BRANCH: '"BR-DOCKER-PUSH-RENTAL"'
+      COOLIFY_RESOURCE_UUID: hcok8w8wwow4c008o0k8wg4g
+      COOLIFY_CONTAINER_NAME: websocket-hcok8w8wwow4c008o0k8wg4g-055400133465
+      SERVICE_URL_FRONTEND: 'http://gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io'
+      SERVICE_FQDN_FRONTEND: gwwokwkgc880ssgwokw048co.82.112.235.216.sslip.io
+      SERVICE_NAME_BACKEND: backend
+      SERVICE_NAME_CONFIGURATOR: configurator
+      SERVICE_NAME_CREATE_SITE: create-site
+      SERVICE_NAME_DB: db
+      SERVICE_NAME_FRONTEND: frontend
+      SERVICE_NAME_QUEUE_LONG: queue-long
+      SERVICE_NAME_QUEUE_SHORT: queue-short
+      SERVICE_NAME_REDIS_QUEUE: redis-queue
+      SERVICE_NAME_REDIS_CACHE: redis-cache
+      SERVICE_NAME_SCHEDULER: scheduler
+      SERVICE_NAME_WEBSOCKET: websocket
+volumes:
+  hcok8w8wwow4c008o0k8wg4g_sites:
+    name: hcok8w8wwow4c008o0k8wg4g_sites
+  hcok8w8wwow4c008o0k8wg4g_logs:
+    name: hcok8w8wwow4c008o0k8wg4g_logs
+  hcok8w8wwow4c008o0k8wg4g_db-data:
+    name: hcok8w8wwow4c008o0k8wg4g_db-data
+  hcok8w8wwow4c008o0k8wg4g_redis-queue-data:
+    name: hcok8w8wwow4c008o0k8wg4g_redis-queue-data
+networks:
+  frappe_network:
+    driver: bridge
+  hcok8w8wwow4c008o0k8wg4g:
+    name: hcok8w8wwow4c008o0k8wg4g
+    external: true
+configs: {  }
+secrets: {  }

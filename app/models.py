@@ -69,16 +69,7 @@ class BarcodePageMapping(models.Model):
 
 class PrintJob(models.Model):
     """Model to track print jobs"""
-    PAPER_SIZES = [
-        ('A4', 'A4'),
-        ('A3', 'A3'),
-        ('Letter', 'Letter'),
-        ('Legal', 'Legal'),
-    ]
-    
     STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
     ]
@@ -86,14 +77,11 @@ class PrintJob(models.Model):
     barcode_mapping = models.ForeignKey(
         BarcodePageMapping, 
         on_delete=models.CASCADE,
-        help_text="The barcode mapping that was printed"
+        help_text="The barcode mapping that was viewed/printed"
     )
-    paper_size = models.CharField(max_length=10, choices=PAPER_SIZES, default='A4')
-    copies = models.PositiveIntegerField(default=1, help_text="Number of copies to print")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
     created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    error_message = models.TextField(blank=True, help_text="Error message if print job failed")
+    error_message = models.TextField(blank=True, help_text="Error message if any issue occurred")
     
     class Meta:
         ordering = ['-created_at']

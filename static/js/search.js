@@ -4,8 +4,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const searchForm = document.getElementById('searchForm');
     const barcodeInput = document.getElementById('barcodeInput');
     const printBtn = document.getElementById('printBtn');
-    const paperSizeSelect = document.getElementById('paperSize');
-    const copiesInput = document.getElementById('copies');
     const searchResults = document.getElementById('searchResults');
     const resultInfo = document.getElementById('resultInfo');
     const pagePreview = document.getElementById('pagePreview');
@@ -90,9 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setLoading(printBtn, true);
 
         const printData = {
-            mapping_id: currentMappingId,
-            paper_size: paperSizeSelect.value,
-            copies: parseInt(copiesInput.value)
+            mapping_id: currentMappingId
         };
 
         fetch('/api/print-page/', {
@@ -108,7 +104,10 @@ document.addEventListener('DOMContentLoaded', function() {
             setLoading(printBtn, false);
             
             if (data.success) {
-                showNotification(`Print job submitted successfully! Job ID: ${data.job_id}`, 'success');
+                showNotification(`Page ready for printing!`, 'success');
+                
+                // Open the PDF in a new window/tab for printing
+                window.open(data.pdf_url, '_blank');
                 
                 // Reset form after successful print
                 setTimeout(() => {
@@ -118,7 +117,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     barcodeInput.focus();
                 }, 2000);
             } else {
-                showNotification(data.error || 'Print job failed', 'error');
+                showNotification(data.error || 'Print preparation failed', 'error');
             }
         })
         .catch(error => {

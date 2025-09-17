@@ -25,12 +25,12 @@ class BarcodePageMappingAdmin(admin.ModelAdmin):
 
 @admin.register(PrintJob)
 class PrintJobAdmin(admin.ModelAdmin):
-    list_display = ['barcode_mapping', 'paper_size', 'copies', 'status', 'created_at', 'completed_at']
-    list_filter = ['status', 'paper_size', 'created_at']
+    list_display = ['barcode_mapping', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
     search_fields = ['barcode_mapping__barcode_text', 'barcode_mapping__pdf_document__name']
-    readonly_fields = ['created_at', 'completed_at']
+    readonly_fields = ['created_at']
     
     def get_readonly_fields(self, request, obj=None):
         if obj and obj.status in ['completed', 'failed']:
-            return self.readonly_fields + ['barcode_mapping', 'paper_size', 'copies']
+            return self.readonly_fields + ['barcode_mapping']
         return self.readonly_fields
