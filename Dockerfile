@@ -27,6 +27,9 @@ RUN pip install --upgrade pip \
 # Copy application code
 COPY . /app/
 
+# Collect static files
+RUN python manage.py collectstatic --noinput
+
 # Expose the port for the Django application
 EXPOSE 8000
 
