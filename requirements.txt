@@ -2,3 +2,4 @@ Django
 pypdf
 Pillow
 reportlab
+gunicorn
