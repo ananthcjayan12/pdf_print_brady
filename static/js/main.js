@@ -19,6 +19,9 @@ function getCookie(name) {
 // Setup CSRF token for AJAX requests
 const csrftoken = getCookie('csrftoken');
 
+// Make csrftoken available globally
+window.csrftoken = csrftoken;
+
 // Default AJAX setup
 if (typeof $ !== 'undefined') {
     $.ajaxSetup({
