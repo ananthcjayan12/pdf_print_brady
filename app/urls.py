@@ -17,4 +17,7 @@ urlpatterns = [
     
     # PDF serving
     path('pdf/page/<int:mapping_id>/', views.serve_pdf_page, name='serve_pdf_page'),
+    
+    # Admin reports
+    path('admin-report/', views.admin_report_view, name='admin_report'),
 ]

@@ -7,6 +7,9 @@ from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from django.core.files.storage import default_storage
 from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
+from django.db.models import Count, Q
+from django.utils import timezone
 import json
 import os
 import logging
@@ -294,3 +297,108 @@ def serve_pdf_page(request, mapping_id):
     except Exception as e:
         logger.error(f"Error serving PDF page {mapping_id}: {str(e)}")
         raise Http404("PDF page not found")
+
+
+@staff_member_required
+def admin_report_view(request):
+    """Admin view for PDF printing reports"""
+    
+    # Get all PDF documents with related data
+    pdf_documents = PDFDocument.objects.prefetch_related(
+        'barcode_mappings__print_jobs'
+    ).annotate(
+        total_pages_with_barcodes=Count('barcode_mappings'),
+        printed_pages=Count(
+            'barcode_mappings__print_jobs',
+            filter=Q(barcode_mappings__print_jobs__status='completed')
+        )
+    ).order_by('-uploaded_at')
+    
+    # Calculate detailed statistics for each PDF
+    pdf_stats = []
+    overall_stats = {
+        'total_pdfs': 0,
+        'total_pages': 0,
+        'total_pages_with_barcodes': 0,
+        'total_printed_pages': 0,
+        'total_unprinted_pages': 0,
+        'recent_prints': 0
+    }
+    
+    # Get recent prints (last 7 days)
+    recent_date = timezone.now() - timezone.timedelta(days=7)
+    
+    for pdf in pdf_documents:
+        # Get detailed information for each PDF
+        mappings = pdf.barcode_mappings.all()
+        
+        printed_mappings = []
+        unprinted_mappings = []
+        
+        for mapping in mappings:
+            print_jobs = mapping.print_jobs.filter(status='completed')
+            if print_jobs.exists():
+                latest_print = print_jobs.latest('created_at')
+                printed_mappings.append({
+                    'mapping': mapping,
+                    'print_count': print_jobs.count(),
+                    'latest_print': latest_print,
+                    'is_recent': latest_print.created_at >= recent_date
+                })
+            else:
+                unprinted_mappings.append(mapping)
+        
+        # Calculate stats for this PDF
+        total_barcodes = len(mappings)
+        printed_count = len(printed_mappings)
+        unprinted_count = len(unprinted_mappings)
+        recent_prints_count = sum(1 for p in printed_mappings if p['is_recent'])
+        
+        pdf_stat = {
+            'pdf': pdf,
+            'total_pages': pdf.total_pages or 0,
+            'total_barcodes': total_barcodes,
+            'printed_count': printed_count,
+            'unprinted_count': unprinted_count,
+            'print_percentage': round((printed_count / total_barcodes * 100) if total_barcodes > 0 else 0, 1),
+            'recent_prints_count': recent_prints_count,
+            'printed_mappings': sorted(printed_mappings, key=lambda x: x['latest_print'].created_at, reverse=True),
+            'unprinted_mappings': sorted(unprinted_mappings, key=lambda x: x.barcode_text),
+            'processing_status': 'Completed' if pdf.processed else 'Processing...',
+            'file_size_mb': round(pdf.file_size / (1024 * 1024), 2) if pdf.file_size else 0
+        }
+        
+        pdf_stats.append(pdf_stat)
+        
+        # Update overall statistics
+        overall_stats['total_pdfs'] += 1
+        overall_stats['total_pages'] += pdf_stat['total_pages']
+        overall_stats['total_pages_with_barcodes'] += total_barcodes
+        overall_stats['total_printed_pages'] += printed_count
+        overall_stats['total_unprinted_pages'] += unprinted_count
+        overall_stats['recent_prints'] += recent_prints_count
+    
+    # Calculate overall percentages
+    if overall_stats['total_pages_with_barcodes'] > 0:
+        overall_stats['print_percentage'] = round(
+            (overall_stats['total_printed_pages'] / overall_stats['total_pages_with_barcodes'] * 100), 1
+        )
+    else:
+        overall_stats['print_percentage'] = 0
+    
+    # Get recent print jobs for activity feed
+    recent_print_jobs = PrintJob.objects.select_related(
+        'barcode_mapping__pdf_document'
+    ).filter(
+        status='completed',
+        created_at__gte=recent_date
+    ).order_by('-created_at')[:20]
+    
+    context = {
+        'pdf_stats': pdf_stats,
+        'overall_stats': overall_stats,
+        'recent_print_jobs': recent_print_jobs,
+        'report_date': timezone.now(),
+    }
+    
+    return render(request, 'admin/pdf_report.html', context)
