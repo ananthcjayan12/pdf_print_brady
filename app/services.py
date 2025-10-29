@@ -153,13 +153,17 @@ class TextExtractionService:
         
         logger.debug(f"Extracting serial numbers from text: {len(text)} chars")
         
-        # Regex patterns for serial numbers based on common label formats
+        # Regex patterns for serial numbers based on your specific format
+        # Looking for patterns like: [)>061P475444A.101S1M21181173718VLENSN4LCN
+        # And extracting parts like: 1M211811737
         patterns = {
+            # Pattern to extract the specific serial number from your format
+            'BARCODE_PATTERN': r'\[\)>.*?([0-9][A-Z][0-9]{9,12})',  # Extract 1M211811737 from [)>061P475444A.101S1M21181173718VLENSN4LCN
+            
+            # Additional patterns for flexibility
             'SN_PATTERN': r'S/N[:\s]*(E[A-Z0-9]{10,12})',  # S/N: EA1234567890
             'EAN_PATTERN': r'EAN[:\s]*(\d{10,15})',  # EAN: 1234567890123
-            'QR_PATTERN': r'QTY \((\d+)\).*?S/N[:;\s]*(E[A-Z0-9]{10,12})',  # QTY (01) ... S/N: EA12345...
             'PN_PATTERN': r'\(P\)\s*PN[:\s]*([0-9A-Z]{5,15})',  # (P) PN: 4729382A
-            'FP_PATTERN': r'REV[:/]?([A-Z0-9]{2,8})',  # REV/123 or REV:A12
         }
         
         # Find all instances of each pattern
@@ -185,23 +189,19 @@ class TextExtractionService:
                     'confidence': 1.0,
                 })
         
-        # Generic S/N pattern that can be found in many different label formats
-        # This is more flexible and should catch most serial numbers
+        # Additional patterns to catch various formats
         generic_patterns = [
+            # Pattern for your specific barcode format - more flexible version
+            (r'([0-9][A-Z][0-9]{9,12})', 'BARCODE_ID'),  # Extract 1M211811737 from anywhere in text
+            
             # Standard S/N format with various separators
             (r'S/?N[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
             
             # Serial number with SN prefix
             (r'SN[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
             
-            # Serial Number spelled out
-            (r'SERIAL\s+NUMBER[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
-            
-            # Just the word "Serial" followed by number
-            (r'SERIAL[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
-            
-            # Standalone serial number pattern (if it's on its own line)
-            (r'^([A-Z]{1,3}[0-9]{6,12})$', 'STANDALONE_SN'),
+            # Standalone alphanumeric patterns
+            (r'\b([A-Z]{1,2}[0-9]{8,12})\b', 'ALPHANUMERIC_ID'),
         ]
         
         for pattern, label_type in generic_patterns:

@@ -162,11 +162,28 @@ def search_barcode_ajax(request):
                 'error': 'Please enter a barcode'
             })
         
+        # First, check if the search term is a full barcode string and extract the serial
+        extracted_serial = None
+        if barcode.startswith('[)>'):
+            # Extract the serial number from the full barcode string
+            import re
+            match = re.search(r'\[\)>.*?([0-9][A-Z][0-9]{9,12})', barcode)
+            if match:
+                extracted_serial = match.group(1)
+                logger.info(f"Extracted serial '{extracted_serial}' from full barcode '{barcode}'")
+        
         # Search for barcode in mappings
         try:
-            mapping = BarcodePageMapping.objects.select_related('pdf_document').get(
-                barcode_text__iexact=barcode
-            )
+            if extracted_serial:
+                # If we extracted a serial from full barcode, search for exact match of that serial
+                mapping = BarcodePageMapping.objects.select_related('pdf_document').get(
+                    barcode_text__iexact=extracted_serial
+                )
+            else:
+                # Otherwise, use contains search for partial matches
+                mapping = BarcodePageMapping.objects.select_related('pdf_document').get(
+                    barcode_text__icontains=barcode
+                )
             
             return JsonResponse({
                 'success': True,
