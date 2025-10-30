@@ -307,11 +307,7 @@ def admin_report_view(request):
     pdf_documents = PDFDocument.objects.prefetch_related(
         'barcode_mappings__print_jobs'
     ).annotate(
-        total_pages_with_barcodes=Count('barcode_mappings'),
-        printed_pages=Count(
-            'barcode_mappings__print_jobs',
-            filter=Q(barcode_mappings__print_jobs__status='completed')
-        )
+        total_pages_with_barcodes=Count('barcode_mappings')
     ).order_by('-uploaded_at')
     
     # Calculate detailed statistics for each PDF

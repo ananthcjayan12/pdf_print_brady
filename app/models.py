@@ -77,6 +77,7 @@ class PrintJob(models.Model):
     barcode_mapping = models.ForeignKey(
         BarcodePageMapping, 
         on_delete=models.CASCADE,
+        related_name='print_jobs',
         help_text="The barcode mapping that was viewed/printed"
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='completed')
