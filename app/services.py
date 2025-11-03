@@ -153,12 +153,16 @@ class TextExtractionService:
         
         logger.debug(f"Extracting serial numbers from text: {len(text)} chars")
         
-        # Regex patterns for serial numbers based on your specific format
-        # Looking for patterns like: [)>061P475444A.101S1M21181173718VLENSN4LCN
-        # And extracting parts like: 1M211811737
+        # Regex patterns for both barcode formats you're using
         patterns = {
-            # Pattern to extract the specific serial number from your format
-            'BARCODE_PATTERN': r'\[\)>.*?([0-9][A-Z][0-9]{9,12})',  # Extract 1M211811737 from [)>061P475444A.101S1M21181173718VLENSN4LCN
+            # Pattern 1: Extract K9222712401 from [)>061P473096A.107SK922271240118VLENSN4LIN10D2227
+            'BARCODE_K_PATTERN': r'\[\)>.*?S([A-Z][0-9]{10})[0-9]*[A-Z]',  # Letter + 10 digits after S
+            
+            # Pattern 2: Extract 1M211811737 from [)>061P475444A.101S1M21181173718VLENSN4LCN  
+            'BARCODE_NUM_PATTERN': r'\[\)>.*?S([0-9][A-Z][0-9]{9,12})[0-9]*[A-Z]',  # Digit + Letter + 9-12 digits after S
+            
+            # Fallback patterns for basic barcode detection
+            'BARCODE_GENERIC': r'\[\)>.*?([A-Z0-9]{10,15})',  # Any alphanumeric 10-15 chars in barcode
             
             # Additional patterns for flexibility
             'SN_PATTERN': r'S/N[:\s]*(E[A-Z0-9]{10,12})',  # S/N: EA1234567890
@@ -189,10 +193,13 @@ class TextExtractionService:
                     'confidence': 1.0,
                 })
         
-        # Additional patterns to catch various formats
+        # Additional patterns to catch various formats (standalone patterns)
         generic_patterns = [
-            # Pattern for your specific barcode format - more flexible version
-            (r'([0-9][A-Z][0-9]{9,12})', 'BARCODE_ID'),  # Extract 1M211811737 from anywhere in text
+            # Pattern for K-type serials (K9222712401) - standalone in text
+            (r'\b([A-Z][0-9]{10,11})\b', 'K_TYPE_SERIAL'),  # Letter + 10-11 digits
+            
+            # Pattern for number-letter-number serials (1M211811737) - standalone in text
+            (r'\b([0-9][A-Z][0-9]{9,12})\b', 'NUM_LETTER_SERIAL'),  # Digit + Letter + 9-12 digits
             
             # Standard S/N format with various separators
             (r'S/?N[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
@@ -200,8 +207,8 @@ class TextExtractionService:
             # Serial number with SN prefix
             (r'SN[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
             
-            # Standalone alphanumeric patterns
-            (r'\b([A-Z]{1,2}[0-9]{8,12})\b', 'ALPHANUMERIC_ID'),
+            # General alphanumeric patterns (broader catch)
+            (r'\b([A-Z0-9]{8,15})\b', 'GENERAL_ALPHANUMERIC'),
         ]
         
         for pattern, label_type in generic_patterns:
