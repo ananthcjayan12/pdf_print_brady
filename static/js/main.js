@@ -17,7 +17,7 @@ function getCookie(name) {
 }
 
 // Setup CSRF token for AJAX requests
-const csrftoken = getCookie('csrftoken');
+const csrftoken = getCookie('csrftoken') || window.csrfToken;
 
 // Make csrftoken available globally
 window.csrftoken = csrftoken;

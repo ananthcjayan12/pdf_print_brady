@@ -7,6 +7,11 @@
 <div class="upload-container">
     <h2 class="page-title">Upload Your PDF</h2>
     
+    <!-- Hidden form to get CSRF token -->
+    <form style="display: none;" id="csrfForm">
+        {% csrf_token %}
+    </form>
+    
     <div class="upload-area" id="uploadArea">
         <div class="upload-content">
             <div class="upload-icon">📄</div>
