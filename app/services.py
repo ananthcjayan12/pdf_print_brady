@@ -193,13 +193,10 @@ class TextExtractionService:
                     'confidence': 1.0,
                 })
         
-        # Additional patterns to catch various formats (standalone patterns)
+        # Additional patterns to catch various formats
         generic_patterns = [
-            # Pattern for K-type serials (K9222712401) - standalone in text
-            (r'\b([A-Z][0-9]{10,11})\b', 'K_TYPE_SERIAL'),  # Letter + 10-11 digits
-            
-            # Pattern for number-letter-number serials (1M211811737) - standalone in text
-            (r'\b([0-9][A-Z][0-9]{9,12})\b', 'NUM_LETTER_SERIAL'),  # Digit + Letter + 9-12 digits
+            # Pattern for your specific barcode format - more flexible version
+            (r'([0-9][A-Z][0-9]{9,12})', 'BARCODE_ID'),  # Extract 1M211811737 from anywhere in text
             
             # Standard S/N format with various separators
             (r'S/?N[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
@@ -207,8 +204,8 @@ class TextExtractionService:
             # Serial number with SN prefix
             (r'SN[:\s;\.\-]+([A-Z0-9]{8,15})', 'GENERIC_SN'),
             
-            # General alphanumeric patterns (broader catch)
-            (r'\b([A-Z0-9]{8,15})\b', 'GENERAL_ALPHANUMERIC'),
+            # Standalone alphanumeric patterns
+            (r'\b([A-Z]{1,2}[0-9]{8,12})\b', 'ALPHANUMERIC_ID'),
         ]
         
         for pattern, label_type in generic_patterns:

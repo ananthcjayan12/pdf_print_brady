@@ -169,8 +169,12 @@ def search_barcode_ajax(request):
         extracted_serial = None
         if barcode.startswith('[)>'):
             # Extract the serial number from the full barcode string
+            # Generic approach: Extract 11 characters after 'S'
             import re
-            match = re.search(r'\[\)>.*?([0-9][A-Z][0-9]{9,12})', barcode)
+            
+            # Pattern: Extract exactly 11 characters after 'S'
+            match = re.search(r'\[\)>.*?S([A-Z0-9]{11})', barcode)
+            print("Extracting serial from barcode:", barcode)
             if match:
                 extracted_serial = match.group(1)
                 logger.info(f"Extracted serial '{extracted_serial}' from full barcode '{barcode}'")
