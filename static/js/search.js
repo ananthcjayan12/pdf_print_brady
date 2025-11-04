@@ -24,6 +24,30 @@ document.addEventListener('DOMContentLoaded', function() {
             shiftKey: event.shiftKey
         });
 
+        // Block standalone Shift key (keyCode 16) - barcode scanners often send this
+        if (event.keyCode === 16 || event.key === 'Shift') {
+            console.log('Blocked Shift key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block standalone Alt key (keyCode 18) - barcode scanners often send this
+        if (event.keyCode === 18 || event.key === 'Alt') {
+            console.log('Blocked Alt key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block standalone Control key (keyCode 17) - might also be sent by scanners
+        if (event.keyCode === 17 || event.key === 'Control') {
+            console.log('Blocked Control key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
         // Block Home key (often triggers browser home page navigation)
         if (event.keyCode === 36 || event.key === 'Home') {
             console.log('Blocked Home key');
