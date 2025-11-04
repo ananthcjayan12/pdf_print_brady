@@ -11,6 +11,52 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentMappingId = null;
 
+    // Block developer tools shortcuts specifically when barcode input is focused
+    barcodeInput.addEventListener('keydown', function(event) {
+        // Block F12
+        if (event.keyCode === 123 || event.key === 'F12') {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Ctrl+Shift+I (Inspect Element)
+        if (event.ctrlKey && event.shiftKey && (event.keyCode === 73 || event.key === 'I')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Ctrl+Shift+C (Inspect Element)
+        if (event.ctrlKey && event.shiftKey && (event.keyCode === 67 || event.key === 'C')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Ctrl+Shift+J (Console)
+        if (event.ctrlKey && event.shiftKey && (event.keyCode === 74 || event.key === 'J')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Cmd+Option+I (Mac Inspect Element)
+        if (event.metaKey && event.altKey && (event.keyCode === 73 || event.key === 'I' || event.key === 'i')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Cmd+Option+C (Mac Inspect Element)
+        if (event.metaKey && event.altKey && (event.keyCode === 67 || event.key === 'C' || event.key === 'c')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+        // Block Cmd+Option+J (Mac Console)
+        if (event.metaKey && event.altKey && (event.keyCode === 74 || event.key === 'J' || event.key === 'j')) {
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+    });
+
     // Auto-focus on barcode input
     barcodeInput.focus();
 
