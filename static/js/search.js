@@ -11,8 +11,43 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentMappingId = null;
 
-    // Block developer tools shortcuts specifically when barcode input is focused
+    // Block developer tools shortcuts and navigation keys when barcode input is focused
     barcodeInput.addEventListener('keydown', function(event) {
+        // Log all key presses for debugging (comment out in production)
+        console.log('Key pressed:', {
+            key: event.key,
+            keyCode: event.keyCode,
+            code: event.code,
+            ctrlKey: event.ctrlKey,
+            altKey: event.altKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey
+        });
+
+        // Block Home key (often triggers browser home page navigation)
+        if (event.keyCode === 36 || event.key === 'Home') {
+            console.log('Blocked Home key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Alt+Home (browser home page)
+        if (event.altKey && (event.keyCode === 36 || event.key === 'Home')) {
+            console.log('Blocked Alt+Home');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Cmd+H (Mac hide window / browser home)
+        if (event.metaKey && (event.keyCode === 72 || event.key === 'H' || event.key === 'h')) {
+            console.log('Blocked Cmd+H');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
         // Block F12
         if (event.keyCode === 123 || event.key === 'F12') {
             event.preventDefault();
