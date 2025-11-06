@@ -11,10 +11,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let currentMappingId = null;
 
-    // Block developer tools shortcuts and navigation keys when barcode input is focused
-    barcodeInput.addEventListener('keydown', function(event) {
-        // Log all key presses for debugging (comment out in production)
-        console.log('Key pressed:', {
+    // Persistent keypress logger - stores to localStorage
+    function logKeypress(event) {
+        const timestamp = new Date().toISOString();
+        const keyData = {
+            timestamp: timestamp,
             key: event.key,
             keyCode: event.keyCode,
             code: event.code,
@@ -22,7 +23,54 @@ document.addEventListener('DOMContentLoaded', function() {
             altKey: event.altKey,
             metaKey: event.metaKey,
             shiftKey: event.shiftKey
-        });
+        };
+        
+        // Get existing log from localStorage
+        let keyLog = JSON.parse(localStorage.getItem('barcodeKeyLog') || '[]');
+        keyLog.push(keyData);
+        
+        // Keep only last 100 keypresses to avoid filling up storage
+        if (keyLog.length > 100) {
+            keyLog = keyLog.slice(-100);
+        }
+        
+        // Save back to localStorage
+        localStorage.setItem('barcodeKeyLog', JSON.stringify(keyLog));
+        
+        // Also log to console
+        console.log('Key pressed:', keyData);
+    }
+
+    // Add button to view keypress history
+    const debugBtn = document.createElement('button');
+    debugBtn.textContent = '🔍 View Keypress Log';
+    debugBtn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:8px 12px;background:#007bff;color:white;border:none;border-radius:4px;cursor:pointer;';
+    debugBtn.onclick = function() {
+        const keyLog = JSON.parse(localStorage.getItem('barcodeKeyLog') || '[]');
+        console.clear();
+        console.log('=== COMPLETE KEYPRESS HISTORY ===');
+        console.log(`Total keypresses recorded: ${keyLog.length}`);
+        console.table(keyLog);
+        alert(`Check console for ${keyLog.length} recorded keypresses!\n\nLast 5 keys:\n` + 
+              keyLog.slice(-5).map(k => `${k.key} (code: ${k.keyCode})`).join('\n'));
+    };
+    document.body.appendChild(debugBtn);
+
+    // Add button to clear log
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = '🗑️ Clear Log';
+    clearBtn.style.cssText = 'position:fixed;top:50px;right:10px;z-index:9999;padding:8px 12px;background:#dc3545;color:white;border:none;border-radius:4px;cursor:pointer;';
+    clearBtn.onclick = function() {
+        localStorage.removeItem('barcodeKeyLog');
+        console.log('Keypress log cleared!');
+        alert('Keypress log cleared!');
+    };
+    document.body.appendChild(clearBtn);
+
+    // Block developer tools shortcuts and navigation keys when barcode input is focused
+    barcodeInput.addEventListener('keydown', function(event) {
+        // Log all key presses with persistent storage
+        logKeypress(event);
 
         // Block standalone Shift key (keyCode 16) - barcode scanners often send this
         if (event.keyCode === 16 || event.key === 'Shift') {
