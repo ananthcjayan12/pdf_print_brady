@@ -96,9 +96,73 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
+        // Block Insert key (keyCode 45) - especially when combined with Alt
+        if (event.keyCode === 45 || event.key === 'Insert') {
+            console.log('Blocked Insert key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Alt+ArrowLeft (browser back navigation) - THIS IS THE MAIN CULPRIT
+        if (event.altKey && (event.keyCode === 37 || event.key === 'ArrowLeft')) {
+            console.log('Blocked Alt+ArrowLeft (browser back)');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Alt+ArrowRight (browser forward navigation)
+        if (event.altKey && (event.keyCode === 39 || event.key === 'ArrowRight')) {
+            console.log('Blocked Alt+ArrowRight (browser forward)');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Alt+ArrowDown
+        if (event.altKey && (event.keyCode === 40 || event.key === 'ArrowDown')) {
+            console.log('Blocked Alt+ArrowDown');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block Alt+ArrowUp
+        if (event.altKey && (event.keyCode === 38 || event.key === 'ArrowUp')) {
+            console.log('Blocked Alt+ArrowUp');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block PageDown key (keyCode 34) - especially with Alt
+        if (event.keyCode === 34 || event.key === 'PageDown') {
+            console.log('Blocked PageDown key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block PageUp key (keyCode 33) - especially with Alt
+        if (event.keyCode === 33 || event.key === 'PageUp') {
+            console.log('Blocked PageUp key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
         // Block Home key (often triggers browser home page navigation)
         if (event.keyCode === 36 || event.key === 'Home') {
             console.log('Blocked Home key');
+            event.preventDefault();
+            event.stopPropagation();
+            return false;
+        }
+
+        // Block End key
+        if (event.keyCode === 35 || event.key === 'End') {
+            console.log('Blocked End key');
             event.preventDefault();
             event.stopPropagation();
             return false;
