@@ -28,7 +28,7 @@ ALLOWED_HOSTS = [
     'vogo4s8kc0k84gcosg8g4k0g.82.112.235.216.sslip.io',
     'localhost',
     '127.0.0.1', 
-    '0.0.0.0'
+    '0.0.0.0',
     '72.61.174.204'
 ]
 
