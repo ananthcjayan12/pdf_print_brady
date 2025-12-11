@@ -146,4 +146,4 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # CSRF settings
 CSRF_COOKIE_SECURE = False  # Set to True in production with HTTPS
 CSRF_COOKIE_HTTPONLY = False  # Allow JavaScript to access the CSRF cookie
-CSRF_TRUSTED_ORIGINS = ['http://vogo4s8kc0k84gcosg8g4k0g.82.112.235.216.sslip.io']
+CSRF_TRUSTED_ORIGINS = ['http://vogo4s8kc0k84gcosg8g4k0g.82.112.235.216.sslip.io','http://72.61.174.204:8302']
