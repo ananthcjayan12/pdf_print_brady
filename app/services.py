@@ -97,7 +97,7 @@ class PDFProcessingService:
     
     def extract_page(self, pdf_document, page_number: int) -> Optional[bytes]:
         """
-        Extract a specific page from PDF as bytes
+        Extract a specific page from PDF as bytes, cropped to label size
         
         Args:
             pdf_document: PDFDocument instance
@@ -108,6 +108,7 @@ class PDFProcessingService:
         """
         try:
             import pypdf
+            from reportlab.lib.units import inch
             
             pdf_path = pdf_document.file.path
             
@@ -117,9 +118,34 @@ class PDFProcessingService:
                 if page_number < 1 or page_number > len(pdf_reader.pages):
                     return None
                 
-                # Create new PDF with just the requested page
+                # Get the original page
+                original_page = pdf_reader.pages[page_number - 1]
+                
+                # Get original page dimensions
+                orig_width = float(original_page.mediabox.width)
+                orig_height = float(original_page.mediabox.height)
+                
+                logger.info(f"Original page size: {orig_width} x {orig_height} pts")
+                
+                # Label dimensions (Brady label approximately 4" x 2")
+                label_width = 4 * inch  # 288 pts
+                label_height = 2 * inch  # 144 pts
+                
+                # Crop the page to label size from top-left corner
+                # PDF coordinate system: (0,0) is at bottom-left
+                # So we need to crop from the top, which means setting the top boundary
+                original_page.mediabox.upper_right = (
+                    label_width,
+                    orig_height  # Keep original top
+                )
+                original_page.mediabox.lower_left = (
+                    0,
+                    orig_height - label_height  # Crop from top down
+                )
+                
+                # Create new PDF with cropped page
                 pdf_writer = pypdf.PdfWriter()
-                pdf_writer.add_page(pdf_reader.pages[page_number - 1])
+                pdf_writer.add_page(original_page)
                 
                 # Write to bytes
                 output_buffer = io.BytesIO()
