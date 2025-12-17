@@ -1,75 +1,53 @@
-# PDF Label Serial Number Extractor
+# Brady Print Station (Cloudflare + Local Bridge)
 
-A Django web application that allows users to upload a PDF containing label pages, extract and map serial numbers (S/N) from the text of each page, and enable users to search for a serial number to find and print the corresponding page.
+A modern scanning and printing application decoupled into a **Cloudflare Hosted Frontend** and a **Local Print Bridge**.
 
-## Key Features
+## Architecture
+1.  **Frontend (Cloud)**: React + Vite app hosted on Cloudflare Pages.
+2.  **Backend (Local)**: Python Flask app running on the user's machine to handle printers.
 
-- Upload PDF files containing product labels
-- Automatically extract serial numbers (S/N) from label text using regex patterns
-- Search for specific serial numbers to find the corresponding page
-- Preview and print individual pages based on serial number search
-- Minimal dependencies - only requires pypdf for text extraction
+## 🚀 Deployment (Cloudflare Pages)
 
-## Setup and Installation
+This repository includes a GitHub Action to automatically deploy the frontend to Cloudflare Pages.
 
-1. Clone the repository
-2. Create a virtual environment and activate it:
+### Prerequisites
+1.  **Cloudflare Account**: Create an account at [dash.cloudflare.com](https://dash.cloudflare.com).
+2.  **Pages Project**: Create a new Pages project or let the action create one.
+3.  **GitHub Secrets**: Add the following secrets to your GitHub Repository (**Settings > Secrets and variables > Actions**):
+    *   `CLOUDFLARE_ACCOUNT_ID`: Find this on the right side of your Cloudflare Dashboard.
+    *   `CLOUDFLARE_API_TOKEN`: Create a token with **Cloudflare Pages: Edit** permissions.
+
+### Automatic Deployment
+Push to `main` or `master` to trigger the build and deployment. The action builds the `frontend` directory and uploads the `dist` folder.
+
+---
+
+## 💻 Local Developer Setup
+
+### 1. Start Local Bridge (Backend)
+The backend must run locally to access your USB/Network printers.
 ```bash
-python -m venv env
-source env/bin/activate  # On Windows: env\Scripts\activate
+cd print-server
+./run_server.sh   # Mac/Linux
+# OR
+python app.py     # Windows
 ```
-3. Install requirements:
+*   Runs on: `http://localhost:5001`
+
+### 2. Start Frontend
 ```bash
-pip install -r requirements.txt
+cd frontend
+npm install
+npm run dev
 ```
-4. Apply migrations:
-```bash
-python manage.py migrate
-```
-5. Create a superuser (optional):
-```bash
-python manage.py createsuperuser
-```
-6. Run the development server:
-```bash
-python manage.py runserver
-```
+*   Runs on: `http://localhost:5173`
 
-## How It Works
+### 3. Connect
+Open the frontend, go to **Settings**, and enter your Local Bridge URL (default: `http://localhost:5001`).
 
-1. **Upload PDF**: Users upload a PDF file containing label pages with serial numbers
-2. **Text Extraction**: The system uses pypdf to extract text from each page
-3. **Serial Number Detection**: Regular expressions are used to identify serial numbers (S/N) in the extracted text
-4. **Mapping**: Each identified serial number is mapped to its corresponding page number
-5. **Search**: Users can search for a specific serial number
-6. **Print**: The system can extract and print the specific page containing the searched serial number
+---
 
-## Dependencies
-
-- Django: Web framework
-- pypdf: PDF text extraction
-- Pillow: Image processing (for potential future enhancements)
-- reportlab: PDF generation (for potential future enhancements)
-
-## Implementation Details
-
-The system uses a text-based approach to extract serial numbers:
-
-1. `PDFProcessingService`: Handles the PDF document processing and page extraction
-2. `TextExtractionService`: Uses regex patterns to extract serial numbers from text
-3. `PrintService`: Manages the extraction and printing of specific pages
-
-The system focuses on finding serial numbers using text patterns rather than barcode/image detection, avoiding complex dependencies like poppler or zbar.
-
-## Regex Patterns
-
-The following patterns are used to extract serial numbers:
-
-- Standard S/N format: `S/N: EA1234567890`
-- EAN format: `EAN: 1234567890123`
-- Quantity with S/N: `QTY (01) ... S/N: EA12345...`
-- Part Number: `(P) PN: 4729382A`
-- Revision Number: `REV/123` or `REV:A12`
-- Generic S/N patterns for maximum compatibility
-
-Additional patterns can be added to the `TextExtractionService` class to support different label formats.
+## 🛠 Tech Stack
+*   **Frontend**: React, Vite, Lucide Icons, Stripe Design System
+*   **Backend**: Flask, PyPDF, ReportLab
+*   **Deployment**: Cloudflare Pages (Frontend), Localhost (Backend)

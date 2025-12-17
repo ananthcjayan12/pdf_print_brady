@@ -1,0 +1,8 @@
+flask
+flask-cors
+pypdf
+reportlab
+pillow
+sqlalchemy
+requests
+Werkzeug

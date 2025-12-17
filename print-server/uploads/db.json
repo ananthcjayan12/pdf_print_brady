@@ -1,0 +1,16 @@
+{
+  "documents": {},
+  "mappings": {},
+  "print_jobs": [
+    {
+      "id": "c3165280-cb2d-463e-b305-ac3cc1bfb0d5",
+      "file_id": "033d9b0d-e4a2-48ac-bf68-702f8b8bb573",
+      "doc_name": "0032600624_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "success",
+      "timestamp": "2025-12-17T15:26:51.510590",
+      "error": null
+    }
+  ]
+}
