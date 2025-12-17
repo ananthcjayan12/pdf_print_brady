@@ -3,16 +3,19 @@ name: Build Print Server
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     name: Build Windows EXE
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -26,30 +29,80 @@ jobs:
         working-directory: ./print-server
         run: |
           # --onefile: Create a single exe
-          # --noconsole: Hide console window (optional, but keep it for now so user sees logs)
           pyinstaller --onefile --name BradyPrintBridge app.py
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: BradyPrintBridge-Windows
           path: ./print-server/dist/BradyPrintBridge.exe
 
-  package-linux-mac:
-    name: Package Mac/Linux Source
+  # Script-based bundle (Robust against Antivirus false positives)
+  package-scripts:
+    name: Package Script Bundle
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Create Zip Archive
+      - name: Create Bundle
         run: |
-          cd print-server
-          # Zip everything except venv and build artifacts
-          zip -r ../brady-print-bridge-source.zip . -x "venv/*" -x "__pycache__/*" -x "dist/*" -x "build/*" -x "*.spec"
+          mkdir -p dist-bundle/BradyPrintBridge
+          
+          # Copy print server files
+          cp print-server/app.py dist-bundle/BradyPrintBridge/
+          cp print-server/services.py dist-bundle/BradyPrintBridge/
+          cp print-server/requirements_server.txt dist-bundle/BradyPrintBridge/
+          cp print-server/run_server.sh dist-bundle/BradyPrintBridge/
+          cp print-server/README_SERVER.md dist-bundle/BradyPrintBridge/README.txt
+          
+          # Create zip
+          cd dist-bundle
+          zip -r BradyPrintBridge-Scripts.zip BradyPrintBridge
 
-      - name: Upload Source Artifact
-        uses: actions/upload-artifact@v3
+      - name: Upload Scripts Artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: BradyPrintBridge-MacLinux-Source
-          path: brady-print-bridge-source.zip
+          name: BradyPrintBridge-Scripts
+          path: dist-bundle/BradyPrintBridge-Scripts.zip
+
+  create-release:
+    needs: [build-windows, package-scripts]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Download Windows Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BradyPrintBridge-Windows
+          path: ./artifacts/
+
+      - name: Download Scripts Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BradyPrintBridge-Scripts
+          path: ./artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Release v${{ github.run_number }}
+          body: |
+            Automated build based on latest code.
+            
+            ## Downloads
+            
+            | File | Description |
+            |------|-------------|
+            | **BradyPrintBridge-Scripts.zip** | 🔒 **Recommended** - Run on Mac/Linux/Windows with Python installed. |
+            | BradyPrintBridge.exe | Windows Executable (Self-contained). |
+            
+            ## Quick Start (Scripts)
+            1. Install Python 3.
+            2. Extract zip.
+            3. Run `./run_server.sh` (Mac/Linux) or `python app.py` (Windows).
+          files: |
+            ./artifacts/*
+          draft: false
+          prerelease: false
