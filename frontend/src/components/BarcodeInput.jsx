@@ -34,6 +34,39 @@ function BarcodeInput({ value, onChange, onLookup, isLoading }) {
     }, [value]);
 
     const handleKeyDown = (e) => {
+        // --- KEYSTROKE FILTERING from legacy app ---
+        // Barcode scanners often send modifier keys or navigation keys that mess up the input
+
+        // Block modifiers (Shift, Alt, Control) if standalone
+        if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control' || e.key === 'Meta') {
+            return;
+        }
+
+        // Block Insert
+        if (e.key === 'Insert') {
+            e.preventDefault();
+            return;
+        }
+
+        // Block Alt+Navigations (Browser Back/Forward etc)
+        if (e.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) {
+            e.preventDefault();
+            return;
+        }
+
+        // Block Page Navigation
+        if (['PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+            e.preventDefault();
+            return;
+        }
+
+        // Block F12 (DevTools)
+        if (e.key === 'F12') {
+            e.preventDefault();
+            return;
+        }
+
+        // --- SUBMISSION LOGIC ---
         if (e.key === 'Enter') {
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
             onLookup(value);
