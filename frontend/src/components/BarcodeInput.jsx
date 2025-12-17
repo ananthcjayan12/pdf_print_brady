@@ -34,49 +34,155 @@ function BarcodeInput({ value, onChange, onLookup, isLoading }) {
     }, [value]);
 
     // Global Filter for Scanner Noise (prevents redirects/shortcuts)
+    // Ported from legacy static/js/search.js
     useEffect(() => {
         const handleGlobalKeyDown = (e) => {
-            // Block modifiers (Shift, Alt, Control) if standalone
-            if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control' || e.key === 'Meta') {
-                // Don't preventDefault on modifiers alone usually, unless we want to strip them
-                // But preventing 'Alt' prevents the menu bar focus in Windows
-                // e.preventDefault(); // Optional: careful blocking modifiers globally
-            }
-
-            // Block Insert
-            if (e.key === 'Insert') {
+            // Block standalone Shift key (keyCode 16) - barcode scanners often send this
+            if (e.keyCode === 16 || e.key === 'Shift') {
                 e.preventDefault();
                 e.stopPropagation();
-                return;
+                return false;
             }
 
-            // Block Alt+Navigations (Browser Back/Forward etc) - CRITICAL
-            if (e.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) {
-                console.log('Blocked Scanner Navigation:', e.key);
+            // Block standalone Alt key (keyCode 18) - barcode scanners often send this
+            if (e.keyCode === 18 || e.key === 'Alt') {
                 e.preventDefault();
                 e.stopPropagation();
-                return;
+                return false;
             }
 
-            // Block Page Navigation (often sent by scanners)
-            if (['PageUp', 'PageDown', 'End'].includes(e.key)) {
+            // Block standalone Control key (keyCode 17) - might also be sent by scanners
+            if (e.keyCode === 17 || e.key === 'Control') {
                 e.preventDefault();
                 e.stopPropagation();
-                return;
+                return false;
             }
 
-            // Block Home (but allow text input navigation if needed - scanners usually send it at start/end)
-            if (e.key === 'Home') {
+            // Block Insert key (keyCode 45) - especially when combined with Alt
+            if (e.keyCode === 45 || e.key === 'Insert') {
                 e.preventDefault();
                 e.stopPropagation();
-                return;
+                return false;
+            }
+
+            // Block Alt+ArrowLeft (browser back navigation) - THIS IS THE MAIN CULPRIT
+            if (e.altKey && (e.keyCode === 37 || e.key === 'ArrowLeft')) {
+                console.log('Blocked Alt+ArrowLeft (browser back)');
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Alt+ArrowRight (browser forward navigation)
+            if (e.altKey && (e.keyCode === 39 || e.key === 'ArrowRight')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Alt+ArrowDown
+            if (e.altKey && (e.keyCode === 40 || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Alt+ArrowUp
+            if (e.altKey && (e.keyCode === 38 || e.key === 'ArrowUp')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block PageDown key (keyCode 34) - especially with Alt
+            if (e.keyCode === 34 || e.key === 'PageDown') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block PageUp key (keyCode 33) - especially with Alt
+            if (e.keyCode === 33 || e.key === 'PageUp') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Home key (often triggers browser home page navigation)
+            if (e.keyCode === 36 || e.key === 'Home') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block End key
+            if (e.keyCode === 35 || e.key === 'End') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Alt+Home (browser home page)
+            if (e.altKey && (e.keyCode === 36 || e.key === 'Home')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Cmd+H (Mac hide window / browser home)
+            if (e.metaKey && (e.keyCode === 72 || e.key === 'H' || e.key === 'h')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
             }
 
             // Block F12 (DevTools)
-            if (e.key === 'F12') {
+            if (e.keyCode === 123 || e.key === 'F12') {
                 e.preventDefault();
                 e.stopPropagation();
-                return;
+                return false;
+            }
+
+            // Block Ctrl+Shift+I (Inspect Element)
+            if (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.key === 'I')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Ctrl+Shift+C (Inspect Element)
+            if (e.ctrlKey && e.shiftKey && (e.keyCode === 67 || e.key === 'C')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Ctrl+Shift+J (Console)
+            if (e.ctrlKey && e.shiftKey && (e.keyCode === 74 || e.key === 'J')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Cmd+Option+I (Mac Inspect Element)
+            if (e.metaKey && e.altKey && (e.keyCode === 73 || e.key === 'I' || e.key === 'i')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Cmd+Option+C (Mac Inspect Element)
+            if (e.metaKey && e.altKey && (e.keyCode === 67 || e.key === 'C' || e.key === 'c')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+
+            // Block Cmd+Option+J (Mac Console)
+            if (e.metaKey && e.altKey && (e.keyCode === 74 || e.key === 'J' || e.key === 'j')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
             }
         };
 
