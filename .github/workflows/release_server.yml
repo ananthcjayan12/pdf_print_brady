@@ -1,0 +1,55 @@
+name: Build Print Server
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        working-directory: ./print-server
+        run: |
+          pip install -r requirements_server.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        working-directory: ./print-server
+        run: |
+          # --onefile: Create a single exe
+          # --noconsole: Hide console window (optional, but keep it for now so user sees logs)
+          pyinstaller --onefile --name BradyPrintBridge app.py
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: BradyPrintBridge-Windows
+          path: ./print-server/dist/BradyPrintBridge.exe
+
+  package-linux-mac:
+    name: Package Mac/Linux Source
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Create Zip Archive
+        run: |
+          cd print-server
+          # Zip everything except venv and build artifacts
+          zip -r ../brady-print-bridge-source.zip . -x "venv/*" -x "__pycache__/*" -x "dist/*" -x "build/*" -x "*.spec"
+
+      - name: Upload Source Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: BradyPrintBridge-MacLinux-Source
+          path: brady-print-bridge-source.zip

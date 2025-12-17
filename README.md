@@ -12,10 +12,20 @@ This repository includes a GitHub Action to automatically deploy the frontend to
 
 ### Prerequisites
 1.  **Cloudflare Account**: Create an account at [dash.cloudflare.com](https://dash.cloudflare.com).
-2.  **Pages Project**: Create a new Pages project or let the action create one.
-3.  **GitHub Secrets**: Add the following secrets to your GitHub Repository (**Settings > Secrets and variables > Actions**):
-    *   `CLOUDFLARE_ACCOUNT_ID`: Find this on the right side of your Cloudflare Dashboard.
-    *   `CLOUDFLARE_API_TOKEN`: Create a token with **Cloudflare Pages: Edit** permissions.
+2.  **GitHub Secrets**: Go to your repo **Settings > Secrets and variables > Actions > New repository secret** and add:
+    *   `CLOUDFLARE_ACCOUNT_ID`:
+        *   Log in to Cloudflare Dashboard.
+        *   Click **Workers & Pages** in the sidebar.
+        *   Copy **Account ID** from the "Account details" panel on the right.
+    *   **Create the Project**:
+        1.  Click **Workers & Pages** > **Create Application** > **Pages**.
+        2.  Click **"Get started"** under **"Drag and drop your files"**.
+        3.  Name the project: `brady-print-station`.
+        4.  Click **Create project**. (You can skip the actual file upload, the GitHub Action will do it).
+    *   `CLOUDFLARE_API_TOKEN`:
+        *   Go to [User Profile > API Tokens](https://dash.cloudflare.com/profile/api-tokens).
+        *   Create Token > Use template "Edit Cloudflare Workers" (works for Pages).
+        *   Or Custom Token: Permissions `Account` > `Cloudflare Pages` > `Edit`.
 
 ### Automatic Deployment
 Push to `main` or `master` to trigger the build and deployment. The action builds the `frontend` directory and uploads the `dist` folder.
