@@ -384,7 +384,27 @@ class PrintService:
         """Convert first page of PDF to PIL Image"""
         try:
             from pdf2image import convert_from_path
-            images = convert_from_path(pdf_path, dpi=300, first_page=1, last_page=1)
+            import sys
+            
+            # Determine Poppler path (bundled with EXE or system PATH)
+            poppler_path = None
+            if getattr(sys, 'frozen', False):
+                # Running as PyInstaller EXE - Poppler is bundled in 'poppler' subfolder
+                bundle_dir = sys._MEIPASS
+                poppler_path = os.path.join(bundle_dir, 'poppler')
+                if not os.path.exists(poppler_path):
+                    # Try alternative path structure
+                    poppler_path = os.path.join(os.path.dirname(sys.executable), 'poppler')
+                logger.info(f"Using bundled Poppler at: {poppler_path}")
+            
+            # Convert PDF to image
+            images = convert_from_path(
+                pdf_path, 
+                dpi=300, 
+                first_page=1, 
+                last_page=1,
+                poppler_path=poppler_path
+            )
             if images:
                 img = images[0]
                 if img.mode != 'RGB':
