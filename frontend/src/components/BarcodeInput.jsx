@@ -33,39 +33,60 @@ function BarcodeInput({ value, onChange, onLookup, isLoading }) {
         return () => clearTimeout(debounceTimerRef.current);
     }, [value]);
 
+    // Global Filter for Scanner Noise (prevents redirects/shortcuts)
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            // Block modifiers (Shift, Alt, Control) if standalone
+            if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control' || e.key === 'Meta') {
+                // Don't preventDefault on modifiers alone usually, unless we want to strip them
+                // But preventing 'Alt' prevents the menu bar focus in Windows
+                // e.preventDefault(); // Optional: careful blocking modifiers globally
+            }
+
+            // Block Insert
+            if (e.key === 'Insert') {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Block Alt+Navigations (Browser Back/Forward etc) - CRITICAL
+            if (e.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) {
+                console.log('Blocked Scanner Navigation:', e.key);
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Block Page Navigation (often sent by scanners)
+            if (['PageUp', 'PageDown', 'End'].includes(e.key)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Block Home (but allow text input navigation if needed - scanners usually send it at start/end)
+            if (e.key === 'Home') {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            // Block F12 (DevTools)
+            if (e.key === 'F12') {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        };
+
+        document.addEventListener('keydown', handleGlobalKeyDown, true); // true = capture phase (intervene early)
+        return () => {
+            document.removeEventListener('keydown', handleGlobalKeyDown, true);
+        };
+    }, []);
+
     const handleKeyDown = (e) => {
-        // --- KEYSTROKE FILTERING from legacy app ---
-        // Barcode scanners often send modifier keys or navigation keys that mess up the input
-
-        // Block modifiers (Shift, Alt, Control) if standalone
-        if (e.key === 'Shift' || e.key === 'Alt' || e.key === 'Control' || e.key === 'Meta') {
-            return;
-        }
-
-        // Block Insert
-        if (e.key === 'Insert') {
-            e.preventDefault();
-            return;
-        }
-
-        // Block Alt+Navigations (Browser Back/Forward etc)
-        if (e.altKey && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(e.key)) {
-            e.preventDefault();
-            return;
-        }
-
-        // Block Page Navigation
-        if (['PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
-            e.preventDefault();
-            return;
-        }
-
-        // Block F12 (DevTools)
-        if (e.key === 'F12') {
-            e.preventDefault();
-            return;
-        }
-
         // --- SUBMISSION LOGIC ---
         if (e.key === 'Enter') {
             if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);

@@ -25,12 +25,26 @@ jobs:
           pip install -r requirements_server.txt
           pip install pyinstaller
 
+      - name: Install Poppler (for pdf2image)
+        run: |
+          # Download poppler for Windows
+          $popplerUrl = "https://github.com/oschwartz10612/poppler-windows/releases/download/v24.02.0-0/Release-24.02.0-0.zip"
+          Invoke-WebRequest -Uri $popplerUrl -OutFile poppler.zip
+          Expand-Archive -Path poppler.zip -DestinationPath C:\poppler
+          # Add to PATH for this session
+          $env:PATH = "C:\poppler\poppler-24.02.0\Library\bin;" + $env:PATH
+          # Verify
+          pdftoppm -v
+
       - name: Build EXE (Folder Mode)
         working-directory: ./print-server
+        env:
+          PATH: C:\poppler\poppler-24.02.0\Library\bin;${{ env.PATH }}
         run: |
           # --onedir: Create a folder (less likely to trigger antivirus)
-          # --noconsole: Visible console is better for debugging server issues
-          pyinstaller --onedir --name BradyPrintBridge app.py
+          pyinstaller --onedir --name BradyPrintBridge `
+            --add-binary "C:\poppler\poppler-24.02.0\Library\bin\*;poppler" `
+            app.py
 
       - name: Create Zip Bundle
         working-directory: ./print-server/dist

@@ -5,12 +5,26 @@ import io
 import json
 import uuid
 import pypdf
+import platform
+import subprocess
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
 from PIL import Image
 import threading
 import datetime
 import hashlib
+
+# Windows-specific imports for native printing
+WINDOWS_PRINT_AVAILABLE = False
+if platform.system() == 'Windows':
+    try:
+        import win32print
+        import win32ui
+        import win32con
+        from PIL import ImageWin
+        WINDOWS_PRINT_AVAILABLE = True
+    except ImportError:
+        logging.warning("win32print not available. Install pywin32 for native Windows printing.")
 
 logger = logging.getLogger(__name__)
 
@@ -280,36 +294,127 @@ class PrintService:
             with open(temp_filename, 'wb') as f:
                 f.write(pdf_bytes)
                 
-            # 3. Send to printer
-            import subprocess
-            cmd = ['lpr']
-            if printer_name:
-                cmd.extend(['-P', printer_name])
-            cmd.append(temp_filename)
+            # 3. Send to printer (platform specific)
+            system = platform.system()
             
-            logger.info(f"Executing: {' '.join(cmd)}")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            if system == 'Windows':
+                if WINDOWS_PRINT_AVAILABLE:
+                    # Use native win32print for reliable Windows printing
+                    success, message = self._print_windows_native(temp_filename, printer_name)
+                else:
+                    # Fallback to Powershell
+                    success, message = self._print_windows_powershell(temp_filename, printer_name)
+                
+                if success:
+                    status = "success"
+                else:
+                    raise Exception(message)
+            else:
+                # Mac/Linux LPR
+                cmd = ['lpr']
+                if printer_name:
+                    cmd.extend(['-P', printer_name])
+                cmd.append(temp_filename)
+                
+                logger.info(f"Executing Unix Print: {' '.join(cmd)}")
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode != 0:
+                     raise Exception(f"LPR failed: {result.stderr}")
+                
+                status = "success"
+                message = "Printed successfully"
             
-            # Cleanup
+            # Cleanup temp file
             try:
                 os.remove(temp_filename)
             except: pass
-            
-            if result.returncode == 0:
-                status = "success"
-                message = "Printed successfully"
-                self._log_job(job_id, file_id, doc_name, page_num, printer_name, status, timestamp)
-                return True, message
-            else:
-                message = f"Print failed: {result.stderr}"
-                self._log_job(job_id, file_id, doc_name, page_num, printer_name, status, timestamp, message)
-                return False, message
+
+            self._log_job(job_id, file_id, doc_name, page_num, printer_name, status, timestamp)
+            return True, message
                 
         except Exception as e:
             logger.error(f"Print error: {e}")
             message = str(e)
             self._log_job(job_id, file_id, doc_name if 'doc_name' in locals() else 'Unknown', page_num, printer_name, status, timestamp, message)
             return False, message
+
+    def _print_windows_native(self, pdf_path, printer_name=None):
+        """Print using win32print (native GDI) - Most Reliable Method"""
+        try:
+            # Convert PDF to Image first
+            image = self._pdf_to_image(pdf_path)
+            if image is None:
+                # Fallback to Powershell if conversion fails
+                logger.warning("PDF to Image conversion failed, falling back to Powershell")
+                return self._print_windows_powershell(pdf_path, printer_name)
+            
+            # Get printer
+            if not printer_name:
+                printer_name = win32print.GetDefaultPrinter()
+            
+            # GDI Printing (from working project)
+            hDC = win32ui.CreateDC()
+            hDC.CreatePrinterDC(printer_name)
+            
+            printable_area = (hDC.GetDeviceCaps(win32con.HORZRES), hDC.GetDeviceCaps(win32con.VERTRES))
+            ratio = min(printable_area[0] / image.size[0], printable_area[1] / image.size[1])
+            scaled_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
+            
+            bmp = image.resize(scaled_size)
+            dib = ImageWin.Dib(bmp)
+            
+            hDC.StartDoc("Barcode Label")
+            hDC.StartPage()
+            x = (printable_area[0] - scaled_size[0]) // 2
+            y = (printable_area[1] - scaled_size[1]) // 2
+            dib.draw(hDC.GetHandleOutput(), (x, y, x + scaled_size[0], y + scaled_size[1]))
+            hDC.EndPage()
+            hDC.EndDoc()
+            hDC.DeleteDC()
+            
+            return True, f"Printed to {printer_name}"
+            
+        except Exception as e:
+            logger.error(f"Native Windows print failed: {e}")
+            # Fallback to Powershell
+            return self._print_windows_powershell(pdf_path, printer_name)
+
+    def _pdf_to_image(self, pdf_path):
+        """Convert first page of PDF to PIL Image"""
+        try:
+            from pdf2image import convert_from_path
+            images = convert_from_path(pdf_path, dpi=300, first_page=1, last_page=1)
+            if images:
+                img = images[0]
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                return img
+        except ImportError:
+            logger.warning("pdf2image not installed. Install it for native Windows printing.")
+        except Exception as e:
+            logger.error(f"PDF to image conversion error: {e}")
+        return None
+
+    def _print_windows_powershell(self, file_path, printer_name=None):
+        """Fallback Windows printing using Powershell Start-Process"""
+        try:
+            if printer_name:
+                cmd = ['powershell', '-Command', f'Start-Process -FilePath "{file_path}" -Verb PrintTo -ArgumentList "{printer_name}" -PassThru -Wait']
+            else:
+                cmd = ['powershell', '-Command', f'Start-Process -FilePath "{file_path}" -Verb Print -PassThru']
+            
+            logger.info(f"Executing Windows Print: {cmd}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode == 0:
+                return True, "Sent to Windows print queue"
+            else:
+                return False, f"Powershell print failed: {result.stderr}"
+        except subprocess.TimeoutExpired:
+            return False, "Print operation timed out"
+        except Exception as e:
+            return False, str(e)
 
     def _log_job(self, job_id, file_id, doc_name, page_num, printer_name, status, timestamp, error=None):
         job_data = {
