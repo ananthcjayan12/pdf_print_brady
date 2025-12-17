@@ -112,8 +112,17 @@ def scan_barcode(barcode):
 @app.route('/api/preview/<file_id>/<int:page_num>', methods=['GET'])
 def preview_page(file_id, page_num):
     try:
+        # Get label settings from query params (for live preview)
+        label_settings = {
+            'width': float(request.args.get('width', 3.94)),
+            'height': float(request.args.get('height', 1.5)),
+            'offsetX': float(request.args.get('offsetX', 0)),
+            'offsetY': float(request.args.get('offsetY', 0)),
+            'scale': float(request.args.get('scale', 100))
+        }
+        
         # Get processed and/or cropped page image/pdf
-        image_bytes = pdf_service.get_page_image(file_id, page_num)
+        image_bytes = pdf_service.get_page_image(file_id, page_num, label_settings)
         return send_file(
             io.BytesIO(image_bytes),
             mimetype='application/pdf',
@@ -129,12 +138,13 @@ def print_label():
     file_id = data.get('file_id')
     page_num = data.get('page_num')
     printer_name = data.get('printer_name')
+    label_settings = data.get('label_settings', {})
     
     if not file_id or not page_num:
         return jsonify({'error': 'Missing file_id or page_num'}), 400
         
     try:
-        success, message = print_service.print_page(file_id, page_num, printer_name)
+        success, message = print_service.print_page(file_id, page_num, printer_name, label_settings)
         if success:
             return jsonify({'success': True, 'message': message})
         else:

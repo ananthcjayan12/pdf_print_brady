@@ -36,11 +36,12 @@ export const api = {
     },
 
     // Print Label
-    printLabel: async (fileId, pageNum, printerName = null) => {
+    printLabel: async (fileId, pageNum, printerName = null, labelSettings = {}) => {
         const res = await axios.post(`${getBaseUrl()}/api/print`, {
             file_id: fileId,
             page_num: pageNum,
-            printer_name: printerName
+            printer_name: printerName,
+            label_settings: labelSettings
         });
         return res.data;
     },

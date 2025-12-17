@@ -203,7 +203,7 @@ class PDFProcessingService:
         
         return None
 
-    def get_page_image(self, file_id, page_num):
+    def get_page_image(self, file_id, page_num, label_settings=None):
         # In a real implementation, we render PDF page to image for preview
         # simplified here to return specific page bytes as PDF for browser
         # But user wants IMAGE preview in React usually
@@ -217,25 +217,51 @@ class PDFProcessingService:
         if not doc:
             raise Exception("Document not found")
             
-        return self._extract_page_bytes(doc['path'], page_num)
+        return self._extract_page_bytes(doc['path'], page_num, label_settings)
 
-    def _extract_page_bytes(self, pdf_path, page_num):
-        # Cropping Logic from original app
+    def _extract_page_bytes(self, pdf_path, page_num, label_settings=None):
+        # Cropping Logic from original app (now configurable via label_settings)
         with open(pdf_path, 'rb') as file:
             pdf_reader = pypdf.PdfReader(file)
             if page_num < 1 or page_num > len(pdf_reader.pages):
                 raise Exception("Invalid page number")
             
             original_page = pdf_reader.pages[page_num - 1]
+            
+            # Get dimensions from settings with defaults
+            if label_settings is None:
+                label_settings = {}
+            
+            # Scale: 100 = 100% (no change), 50 = shrink to 50%, 200 = expand to 200%
+            scale = label_settings.get('scale', 100) / 100.0
+            
+            # Apply scale transformation to page
+            if scale != 1.0:
+                original_page.scale_by(scale)
+            
+            # Get page dimensions after scaling
             orig_height = float(original_page.mediabox.height)
+            orig_width = float(original_page.mediabox.width)
             
-            # Label dimensions (Brady label approx 4" x 2")
-            label_width = 4 * inch
-            label_height = 2 * inch
+            label_width = label_settings.get('width', 3.94) * inch
+            label_height = label_settings.get('height', 1.5) * inch
+            offset_x = label_settings.get('offsetX', 0) * inch
+            offset_y = label_settings.get('offsetY', 0) * inch
             
-            # Crop top-left (0,0 in PDF is bottom-left usually, original logic cropped from top)
-            original_page.mediabox.upper_right = (label_width, orig_height)
-            original_page.mediabox.lower_left = (0, orig_height - label_height)
+            # Crop from top-left (0,0 in PDF is bottom-left)
+            lower_left_x = offset_x
+            lower_left_y = orig_height - offset_y - label_height
+            upper_right_x = offset_x + label_width
+            upper_right_y = orig_height - offset_y
+            
+            # Clamp to page bounds
+            lower_left_x = max(0, lower_left_x)
+            lower_left_y = max(0, lower_left_y)
+            upper_right_x = min(orig_width, upper_right_x)
+            upper_right_y = min(orig_height, upper_right_y)
+            
+            original_page.mediabox.lower_left = (lower_left_x, lower_left_y)
+            original_page.mediabox.upper_right = (upper_right_x, upper_right_y)
             
             pdf_writer = pypdf.PdfWriter()
             pdf_writer.add_page(original_page)
@@ -275,19 +301,23 @@ class PrintService:
     def __init__(self, pdf_service):
         self.pdf_service = pdf_service
         
-    def print_page(self, file_id, page_num, printer_name=None):
+    def print_page(self, file_id, page_num, printer_name=None, label_settings=None):
         job_id = str(uuid.uuid4())
         timestamp = datetime.datetime.now().isoformat()
         status = "failed"
         message = ""
+        
+        # Default label settings
+        if label_settings is None:
+            label_settings = {}
         
         try:
             # Get document name for logs
             doc = self.pdf_service.documents.get(file_id, {})
             doc_name = doc.get('name', 'Unknown Document')
             
-            # 1. Get cropped PDF bytes
-            pdf_bytes = self.pdf_service.get_page_image(file_id, page_num)
+            # 1. Get cropped PDF bytes (pass label settings for custom crop)
+            pdf_bytes = self.pdf_service.get_page_image(file_id, page_num, label_settings)
             
             # 2. Save to temp file
             temp_filename = f"print_job_{job_id}.pdf"
