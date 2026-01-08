@@ -199,6 +199,36 @@
       "status": "success",
       "timestamp": "2025-12-17T15:26:51.510590",
       "error": null
+    },
+    {
+      "id": "faa87c8a-91bd-4008-a81e-bd3476b4f340",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-08T16:18:47.080195",
+      "error": "LPR failed: lpr: Error - No default destination.\n"
+    },
+    {
+      "id": "6c1655fc-eec1-44ed-bbf5-fc49e96e5156",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-08T16:18:59.076917",
+      "error": "LPR failed: lpr: Error - No default destination.\n"
+    },
+    {
+      "id": "0e08ea74-3d98-4470-91a6-10f8c2707b0c",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-08T16:19:57.929399",
+      "error": "LPR failed: lpr: Error - No default destination.\n"
     }
   ]
 }

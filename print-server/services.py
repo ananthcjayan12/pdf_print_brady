@@ -70,6 +70,109 @@ class PDFProcessingService:
         # Return sorted by timestamp desc
         return sorted(self.print_jobs, key=lambda x: x['timestamp'], reverse=True)
 
+    def get_barcode_print_count(self, barcode):
+        """Count how many times a barcode was printed"""
+        count = 0
+        # Find the mapping for this barcode to get file_id and page_num
+        mapping = self.find_barcode(barcode)
+        if not mapping:
+            return 0
+        
+        file_id = mapping['file_id']
+        page_num = mapping['page_num']
+        
+        for job in self.print_jobs:
+            if job['file_id'] == file_id and job['page_num'] == page_num and job['status'] == 'success':
+                count += 1
+        return count
+
+    def get_last_print_for_barcode(self, barcode):
+        """Get the last successful print job for a barcode"""
+        mapping = self.find_barcode(barcode)
+        if not mapping:
+            return None
+        
+        file_id = mapping['file_id']
+        page_num = mapping['page_num']
+        
+        # Sort jobs by timestamp desc and find first matching
+        sorted_jobs = sorted(self.print_jobs, key=lambda x: x['timestamp'], reverse=True)
+        for job in sorted_jobs:
+            if job['file_id'] == file_id and job['page_num'] == page_num and job['status'] == 'success':
+                return {
+                    'timestamp': job['timestamp'],
+                    'printer': job.get('printer', 'Default')
+                }
+        return None
+
+    def get_dashboard_stats(self):
+        """Get overall dashboard statistics"""
+        total_documents = len(self.documents)
+        total_barcodes = len(self.mappings)
+        total_pages = sum(doc.get('pages', 0) for doc in self.documents.values())
+        
+        # Print statistics
+        total_prints = len([j for j in self.print_jobs if j['status'] == 'success'])
+        failed_prints = len([j for j in self.print_jobs if j['status'] == 'failed'])
+        
+        # Pending prints (barcodes that have never been printed)
+        printed_pages = set()
+        for job in self.print_jobs:
+            if job['status'] == 'success':
+                printed_pages.add((job['file_id'], job['page_num']))
+        
+        pending_prints = 0
+        for barcode, mapping in self.mappings.items():
+            key = (mapping['file_id'], mapping['page_num'])
+            if key not in printed_pages:
+                pending_prints += 1
+        
+        return {
+            'total_documents': total_documents,
+            'total_barcodes': total_barcodes,
+            'total_pages': total_pages,
+            'total_prints': total_prints,
+            'failed_prints': failed_prints,
+            'pending_prints': pending_prints
+        }
+
+    def get_document_print_stats(self, file_id):
+        """Get print statistics for a specific document"""
+        if file_id not in self.documents:
+            return None
+        
+        doc = self.documents[file_id]
+        
+        # Get mappings for this document
+        doc_mappings = [
+            {'barcode': k, **v}
+            for k, v in self.mappings.items()
+            if v['file_id'] == file_id
+        ]
+        
+        # Count prints per page
+        page_print_counts = {}
+        for job in self.print_jobs:
+            if job['file_id'] == file_id and job['status'] == 'success':
+                page_num = job['page_num']
+                page_print_counts[page_num] = page_print_counts.get(page_num, 0) + 1
+        
+        # Calculate printed and pending
+        printed_pages = set(page_print_counts.keys())
+        all_barcode_pages = set(m['page_num'] for m in doc_mappings)
+        
+        pending_pages = all_barcode_pages - printed_pages
+        
+        return {
+            'document': doc,
+            'total_barcodes': len(doc_mappings),
+            'printed_count': len(printed_pages),
+            'pending_count': len(pending_pages),
+            'pending_pages': list(pending_pages),
+            'page_print_counts': page_print_counts,
+            'mappings': doc_mappings
+        }
+
     def calculate_file_hash(self, file_path):
         sha256_hash = hashlib.sha256()
         with open(file_path, "rb") as f:

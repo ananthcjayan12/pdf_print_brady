@@ -30,6 +30,64 @@ print_service = PrintService(pdf_service)
 def health_check():
     return jsonify({'status': 'ok', 'message': 'Print Server is running'})
 
+@app.route('/api/printers', methods=['GET'])
+def list_printers():
+    """List available system printers"""
+    try:
+        import subprocess
+        import platform
+        
+        printers = []
+        default_printer = None
+        system = platform.system()
+        
+        if system == 'Darwin':  # macOS
+            # Get list of printers
+            result = subprocess.run(['lpstat', '-p'], capture_output=True, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    if line.startswith('printer'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            printers.append(parts[1])
+            
+            # Get default printer
+            result = subprocess.run(['lpstat', '-d'], capture_output=True, text=True)
+            if result.returncode == 0 and 'system default destination:' in result.stdout:
+                default_printer = result.stdout.split(':')[-1].strip()
+                
+        elif system == 'Windows':
+            try:
+                import win32print
+                for p in win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS):
+                    printers.append(p[2])
+                default_printer = win32print.GetDefaultPrinter()
+            except ImportError:
+                # Fallback to PowerShell
+                result = subprocess.run(
+                    ['powershell', '-Command', 'Get-Printer | Select-Object -ExpandProperty Name'],
+                    capture_output=True, text=True
+                )
+                if result.returncode == 0:
+                    printers = [p.strip() for p in result.stdout.strip().split('\n') if p.strip()]
+        else:  # Linux
+            result = subprocess.run(['lpstat', '-p'], capture_output=True, text=True)
+            if result.returncode == 0:
+                for line in result.stdout.strip().split('\n'):
+                    if line.startswith('printer'):
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            printers.append(parts[1])
+        
+        return jsonify({
+            'success': True,
+            'printers': printers,
+            'default_printer': default_printer
+        })
+    except Exception as e:
+        logger.error(f"Failed to list printers: {e}")
+        return jsonify({'success': False, 'error': str(e), 'printers': []})
+
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     if 'file' not in request.files:
@@ -95,10 +153,16 @@ def scan_barcode(barcode):
         # Search for barcode
         result = pdf_service.find_barcode(barcode)
         if result:
+            # Check if this barcode was printed before
+            print_count = pdf_service.get_barcode_print_count(barcode)
+            last_print = pdf_service.get_last_print_for_barcode(barcode)
+            
             return jsonify({
                 'success': True,
                 'found': True,
-                'mapping': result
+                'mapping': result,
+                'print_count': print_count,
+                'last_print': last_print
             })
         else:
             return jsonify({
@@ -106,6 +170,26 @@ def scan_barcode(barcode):
                 'found': False,
                 'message': 'Barcode not found'
             })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    """Get dashboard statistics"""
+    try:
+        stats = pdf_service.get_dashboard_stats()
+        return jsonify({'success': True, 'stats': stats})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/documents/<file_id>/print-stats', methods=['GET'])
+def get_document_print_stats(file_id):
+    """Get print statistics for a specific document"""
+    try:
+        stats = pdf_service.get_document_print_stats(file_id)
+        if stats:
+            return jsonify({'success': True, 'stats': stats})
+        return jsonify({'error': 'Document not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

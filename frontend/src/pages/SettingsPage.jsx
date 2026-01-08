@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye } from 'lucide-react';
+import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye, Printer } from 'lucide-react';
 import { api } from '../api';
 
 function SettingsPage() {
@@ -7,6 +7,11 @@ function SettingsPage() {
     const [serverUrl, setServerUrl] = useState('http://localhost:5001');
     const [status, setStatus] = useState('idle');
     const [message, setMessage] = useState('');
+
+    // Printer settings
+    const [printers, setPrinters] = useState([]);
+    const [selectedPrinter, setSelectedPrinter] = useState('');
+    const [loadingPrinters, setLoadingPrinters] = useState(false);
 
     // Label settings - default 100x38mm = ~3.94x1.5 inches
     const [labelSettings, setLabelSettings] = useState({
@@ -44,9 +49,35 @@ function SettingsPage() {
         const storedDelay = localStorage.getItem('auto_print_delay');
         if (storedDelay) setAutoPrintDelay(parseInt(storedDelay, 10));
 
+        // Load saved printer
+        const storedPrinter = localStorage.getItem('selected_printer');
+        if (storedPrinter) setSelectedPrinter(storedPrinter);
+
         // Load documents for preview
         loadDocuments();
+
+        // Load printers
+        loadPrinters();
     }, []);
+
+    const loadPrinters = async () => {
+        setLoadingPrinters(true);
+        try {
+            const result = await api.getPrinters();
+            if (result.success) {
+                setPrinters(result.printers || []);
+                // If no printer selected yet, use default
+                if (!selectedPrinter && result.default_printer) {
+                    setSelectedPrinter(result.default_printer);
+                    localStorage.setItem('selected_printer', result.default_printer);
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load printers:', e);
+        } finally {
+            setLoadingPrinters(false);
+        }
+    };
 
     const loadDocuments = async () => {
         try {
@@ -165,6 +196,57 @@ function SettingsPage() {
 
                         <button className="btn btn-primary" onClick={handleSaveServer} disabled={status === 'testing'}>
                             {status === 'testing' ? 'Testing...' : 'Test & Save'}
+                        </button>
+                    </div>
+
+                    {/* Printer Selection */}
+                    <div className="card" style={{ marginBottom: '24px' }}>
+                        <div className="flex items-center" style={{ marginBottom: '16px' }}>
+                            <Printer size={20} color="var(--primary)" style={{ marginRight: '10px' }} />
+                            <h3 style={{ fontSize: '16px', margin: 0 }}>Printer</h3>
+                        </div>
+
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ display: 'block', fontWeight: 500, marginBottom: '8px', fontSize: '14px' }}>
+                                Select Printer
+                            </label>
+                            {printers.length === 0 ? (
+                                <div style={{
+                                    padding: '12px',
+                                    background: '#fef3c7',
+                                    borderRadius: '6px',
+                                    color: '#b45309',
+                                    fontSize: '13px',
+                                    marginBottom: '12px'
+                                }}>
+                                    <strong>No printers found.</strong> Please add a printer in System Settings → Printers & Scanners.
+                                </div>
+                            ) : (
+                                <select
+                                    className="input"
+                                    value={selectedPrinter}
+                                    onChange={(e) => {
+                                        setSelectedPrinter(e.target.value);
+                                        localStorage.setItem('selected_printer', e.target.value);
+                                    }}
+                                    style={{ width: '100%' }}
+                                >
+                                    <option value="">-- Select a printer --</option>
+                                    {printers.map(printer => (
+                                        <option key={printer} value={printer}>{printer}</option>
+                                    ))}
+                                </select>
+                            )}
+                        </div>
+
+                        <button
+                            className="btn btn-secondary"
+                            onClick={loadPrinters}
+                            disabled={loadingPrinters}
+                            style={{ width: '100%' }}
+                        >
+                            <RefreshCw size={14} style={{ marginRight: '6px' }} />
+                            {loadingPrinters ? 'Refreshing...' : 'Refresh Printers'}
                         </button>
                     </div>
 

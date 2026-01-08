@@ -29,7 +29,7 @@ export const api = {
         return res.data;
     },
 
-    // Scan Barcode
+    // Scan Barcode - now returns print_count and last_print info
     scanBarcode: async (barcode) => {
         const res = await axios.get(`${getBaseUrl()}/api/scan/${encodeURIComponent(barcode)}`);
         return res.data;
@@ -67,8 +67,27 @@ export const api = {
         return res.data;
     },
 
+    // Get Dashboard Stats
+    getStats: async () => {
+        const res = await axios.get(`${getBaseUrl()}/api/stats`);
+        return res.data;
+    },
+
+    // Get Document Print Stats
+    getDocumentPrintStats: async (fileId) => {
+        const res = await axios.get(`${getBaseUrl()}/api/documents/${fileId}/print-stats`);
+        return res.data;
+    },
+
+    // Get available printers
+    getPrinters: async () => {
+        const res = await axios.get(`${getBaseUrl()}/api/printers`);
+        return res.data;
+    },
+
     // Get Preview URL
     getPreviewUrl: (fileId, pageNum) => {
         return `${getBaseUrl()}/api/preview/${fileId}/${pageNum}`;
     }
 };
+
