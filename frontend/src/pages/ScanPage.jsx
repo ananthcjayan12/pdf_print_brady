@@ -109,12 +109,16 @@ function ScanPage() {
             const labelSettings = JSON.parse(localStorage.getItem('label_settings') || '{}');
             // Get selected printer from localStorage
             const printerName = localStorage.getItem('selected_printer') || null;
+            // Get username from sessionStorage (set by Login)
+            const session = JSON.parse(sessionStorage.getItem('auth_session') || '{}');
+            const username = session.username || 'Anonymous';
 
             await api.printLabel(
                 scanResult.file_id,
                 scanResult.page_num,
                 printerName, // Use selected printer
-                labelSettings // Pass crop settings
+                labelSettings, // Pass crop settings
+                username // Pass username
             );
 
             // Silent success: just reset for next scan after brief display
@@ -122,11 +126,13 @@ function ScanPage() {
                 setBarcode('');
                 setScanResult(null);
                 setDuplicateInfo(null);
+                setError(null);
             }, 500);
 
         } catch (err) {
             console.error('Print error:', err);
             // Optionally show brief error indicator
+            setError('Print failed: ' + (err.response?.data?.error || err.message));
         } finally {
             setIsPrinting(false);
         }

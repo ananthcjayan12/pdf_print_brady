@@ -223,17 +223,72 @@ def print_label():
     page_num = data.get('page_num')
     printer_name = data.get('printer_name')
     label_settings = data.get('label_settings', {})
+    username = data.get('username', 'Unknown') # Get username
     
     if not file_id or not page_num:
         return jsonify({'error': 'Missing file_id or page_num'}), 400
         
     try:
-        success, message = print_service.print_page(file_id, page_num, printer_name, label_settings)
+        # Pass username to print service
+        success, message = print_service.print_page(file_id, page_num, printer_name, label_settings, username)
         if success:
             return jsonify({'success': True, 'message': message})
         else:
             return jsonify({'success': False, 'error': message}), 500
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reports/download', methods=['GET'])
+def download_report():
+    """Generate and download CSV report of print history"""
+    try:
+        import csv
+        
+        # Create CSV in memory
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['Date', 'Time', 'Document', 'Barcode', 'Page', 'User', 'Printer', 'Status', 'Message'])
+        
+        # Data
+        history = pdf_service.get_print_history()
+        for job in history:
+            timestamp = job.get('timestamp', '')
+            date_str = ''
+            time_str = ''
+            if 'T' in timestamp:
+                parts = timestamp.split('T')
+                date_str = parts[0]
+                time_str = parts[1].split('.')[0]
+                
+            writer.writerow([
+                date_str,
+                time_str,
+                job.get('filename', 'Unknown'),
+                job.get('barcode', 'N/A'),
+                job.get('page_num', ''),
+                job.get('username', 'Unknown'), # Include username
+                job.get('printer', 'Default'),
+                job.get('status', ''),
+                job.get('message', '')
+            ])
+            
+        output.seek(0)
+        
+        # Convert string to bytes for send_file
+        mem = io.BytesIO()
+        mem.write(output.getvalue().encode('utf-8'))
+        mem.seek(0)
+        
+        return send_file(
+            mem,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='print_history_report.csv'
+        )
+    except Exception as e:
+        logger.error(f"Report generation failed: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

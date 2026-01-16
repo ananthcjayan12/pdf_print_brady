@@ -404,7 +404,7 @@ class PrintService:
     def __init__(self, pdf_service):
         self.pdf_service = pdf_service
         
-    def print_page(self, file_id, page_num, printer_name=None, label_settings=None):
+    def print_page(self, file_id, page_num, printer_name=None, label_settings=None, username='Unknown'):
         job_id = str(uuid.uuid4())
         timestamp = datetime.datetime.now().isoformat()
         status = "failed"
@@ -463,13 +463,13 @@ class PrintService:
                 os.remove(temp_filename)
             except: pass
 
-            self._log_job(job_id, file_id, doc_name, page_num, printer_name, status, timestamp)
+            self._log_job(job_id, file_id, doc_name, page_num, printer_name, status, timestamp, username=username)
             return True, message
                 
         except Exception as e:
             logger.error(f"Print error: {e}")
             message = str(e)
-            self._log_job(job_id, file_id, doc_name if 'doc_name' in locals() else 'Unknown', page_num, printer_name, status, timestamp, message)
+            self._log_job(job_id, file_id, doc_name if 'doc_name' in locals() else 'Unknown', page_num, printer_name, status, timestamp, message, username=username)
             return False, message
 
     def _print_windows_native(self, pdf_path, printer_name=None):
@@ -569,7 +569,7 @@ class PrintService:
         except Exception as e:
             return False, str(e)
 
-    def _log_job(self, job_id, file_id, doc_name, page_num, printer_name, status, timestamp, error=None):
+    def _log_job(self, job_id, file_id, doc_name, page_num, printer_name, status, timestamp, error=None, username='Unknown'):
         job_data = {
             'id': job_id,
             'file_id': file_id,
@@ -578,6 +578,7 @@ class PrintService:
             'printer': printer_name or 'Default',
             'status': status,
             'timestamp': timestamp,
-            'error': error
+            'error': error,
+            'username': username
         }
         self.pdf_service.log_print_job(job_data)

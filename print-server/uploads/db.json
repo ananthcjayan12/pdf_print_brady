@@ -229,6 +229,61 @@
       "status": "failed",
       "timestamp": "2026-01-08T16:19:57.929399",
       "error": "LPR failed: lpr: Error - No default destination.\n"
+    },
+    {
+      "id": "c4f0a9f7-4832-4817-84ff-7e20636b681e",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-16T17:21:25.710826",
+      "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
+      "username": "admin"
+    },
+    {
+      "id": "a3dbda74-310b-4f11-bcc3-0b56cc4802dd",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-16T17:28:16.000604",
+      "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
+      "username": "admin"
+    },
+    {
+      "id": "f6f4627c-52d0-4b8b-9343-074d90c53a71",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-16T17:28:56.829344",
+      "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
+      "username": "admin"
+    },
+    {
+      "id": "1ac6097c-2ca3-4cf2-982d-a551f66510b7",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-16T17:32:18.108903",
+      "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
+      "username": "Operator-2"
+    },
+    {
+      "id": "6f621ec3-b1ad-43b2-9bd4-abf216a27334",
+      "file_id": "c58222be-2d36-462a-bb93-9b2799780534",
+      "doc_name": "0032600626_05_Dec_25_1.pdf",
+      "page_num": 1,
+      "printer": "Default",
+      "status": "failed",
+      "timestamp": "2026-01-16T17:32:39.317738",
+      "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
+      "username": "Operator-2"
     }
   ]
 }

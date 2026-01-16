@@ -36,14 +36,20 @@ export const api = {
     },
 
     // Print Label
-    printLabel: async (fileId, pageNum, printerName = null, labelSettings = {}) => {
+    printLabel: async (fileId, pageNum, printerName = null, labelSettings = {}, username = 'Unknown') => {
         const res = await axios.post(`${getBaseUrl()}/api/print`, {
             file_id: fileId,
             page_num: pageNum,
             printer_name: printerName,
-            label_settings: labelSettings
+            label_settings: labelSettings,
+            username: username
         });
         return res.data;
+    },
+
+    // Download Report
+    downloadReport: () => {
+        window.open(`${getBaseUrl()}/api/reports/download`, '_blank');
     },
 
     // Dashboard APIs

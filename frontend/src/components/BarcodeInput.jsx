@@ -5,11 +5,25 @@ function BarcodeInput({ value, onChange, onLookup, isLoading }) {
     const debounceTimerRef = useRef(null);
 
     useEffect(() => {
-        // Auto-focus input on mount
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, []);
+        // Auto-focus input on mount and updates
+        const focusInput = () => {
+            if (inputRef.current && !isLoading) {
+                // Prevent scrolling when focusing
+                inputRef.current.focus({ preventScroll: true });
+            }
+        };
+
+        focusInput();
+
+        // Refocus loop for reliable continuous scanning
+        const interval = setInterval(() => {
+            if (document.activeElement !== inputRef.current && !isLoading) {
+                focusInput();
+            }
+        }, 2000); // Check every 2s if we lost focus (e.g. user clicked away)
+
+        return () => clearInterval(interval);
+    }, [isLoading, value]); // Re-run when loading finishes or value is cleared
 
     // Keep focus on input (optional, good for dedicated scanning station)
     useEffect(() => {

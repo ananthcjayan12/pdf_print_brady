@@ -1,24 +1,25 @@
 import { useState, useEffect } from 'react';
-import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, TrendingUp, AlertCircle, User, Key } from 'lucide-react';
+import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, AlertCircle, User, Key, Download, UserPlus, Shield, Lock } from 'lucide-react';
 import { api } from '../api';
 
 function DashboardPage() {
-    const [activeTab, setActiveTab] = useState('documents'); // 'documents', 'history', or 'credentials'
+    const [activeTab, setActiveTab] = useState('documents'); // 'documents', 'history', or 'users'
     const [documents, setDocuments] = useState([]);
     const [history, setHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [stats, setStats] = useState(null);
-    const [credentials, setCredentials] = useState({
-        username: '',
-        password: ''
-    });
-    const [showPassword, setShowPassword] = useState(false);
-    const [credentialsSaved, setCredentialsSaved] = useState(false);
+
+    // User Management State
+    const [users, setUsers] = useState([]);
+    const [currentUser, setCurrentUser] = useState(null);
+    const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' });
+    const [changePassword, setChangePassword] = useState({ current: '', new: '', confirm: '' });
+    const [message, setMessage] = useState({ type: '', text: '' });
 
     useEffect(() => {
         loadStats();
-        loadCredentials();
+        loadCurrentUser();
     }, []);
 
     useEffect(() => {
@@ -34,21 +35,11 @@ function DashboardPage() {
         }
     };
 
-    const loadCredentials = () => {
-        const saved = localStorage.getItem('user_credentials');
-        if (saved) {
-            try {
-                setCredentials(JSON.parse(saved));
-            } catch (e) {
-                console.error('Failed to load credentials', e);
-            }
+    const loadCurrentUser = () => {
+        const session = sessionStorage.getItem('auth_session');
+        if (session) {
+            setCurrentUser(JSON.parse(session));
         }
-    };
-
-    const saveCredentials = () => {
-        localStorage.setItem('user_credentials', JSON.stringify(credentials));
-        setCredentialsSaved(true);
-        setTimeout(() => setCredentialsSaved(false), 2000);
     };
 
     const loadData = async () => {
@@ -60,6 +51,8 @@ function DashboardPage() {
             } else if (activeTab === 'history') {
                 const data = await api.getPrintHistory();
                 if (data.success) setHistory(data.history);
+            } else if (activeTab === 'users') {
+                loadUsers();
             }
         } catch (error) {
             console.error('Failed to load data', error);
@@ -67,6 +60,90 @@ function DashboardPage() {
             setIsLoading(false);
         }
     };
+
+    // --- User Management Logic ---
+
+    const loadUsers = () => {
+        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+        setUsers(storedUsers);
+    };
+
+    const handleAddUser = (e) => {
+        e.preventDefault();
+        if (!newUser.username || !newUser.password) {
+            setMessage({ type: 'error', text: 'Username and password are required' });
+            return;
+        }
+
+        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+        if (storedUsers.find(u => u.username === newUser.username)) {
+            setMessage({ type: 'error', text: 'Username already exists' });
+            return;
+        }
+
+        const updatedUsers = [...storedUsers, newUser];
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
+        setUsers(updatedUsers);
+        setNewUser({ username: '', password: '', role: 'user' });
+        setMessage({ type: 'success', text: 'User added successfully' });
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    };
+
+    const handleDeleteUser = (username) => {
+        if (username === currentUser.username) {
+            alert("You cannot delete yourself.");
+            return;
+        }
+        if (confirm(`Are you sure you want to delete user "${username}"?`)) {
+            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+            const updatedUsers = storedUsers.filter(u => u.username !== username);
+            localStorage.setItem('users', JSON.stringify(updatedUsers));
+            setUsers(updatedUsers);
+        }
+    };
+
+    const handleResetPassword = (username) => {
+        const newPass = prompt(`Enter new password for ${username}:`);
+        if (newPass) {
+            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+            const updatedUsers = storedUsers.map(u =>
+                u.username === username ? { ...u, password: newPass } : u
+            );
+            localStorage.setItem('users', JSON.stringify(updatedUsers));
+            setUsers(updatedUsers);
+            setMessage({ type: 'success', text: `Password for ${username} reset successfully` });
+            setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+        }
+    };
+
+    const handleChangeOwnPassword = (e) => {
+        e.preventDefault();
+        if (changePassword.new !== changePassword.confirm) {
+            setMessage({ type: 'error', text: 'New passwords do not match' });
+            return;
+        }
+
+        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+        const userIndex = storedUsers.findIndex(u => u.username === currentUser.username);
+
+        if (userIndex === -1) {
+            setMessage({ type: 'error', text: 'User not found' });
+            return;
+        }
+
+        if (storedUsers[userIndex].password !== changePassword.current) {
+            setMessage({ type: 'error', text: 'Current password is incorrect' });
+            return;
+        }
+
+        storedUsers[userIndex].password = changePassword.new;
+        localStorage.setItem('users', JSON.stringify(storedUsers));
+        setChangePassword({ current: '', new: '', confirm: '' });
+        setMessage({ type: 'success', text: 'Password changed successfully' });
+        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    };
+
+    // --- Document Logic ---
 
     const handleDelete = async (e, id) => {
         e.stopPropagation();
@@ -91,10 +168,23 @@ function DashboardPage() {
         }
     };
 
-    // Calculate pending prints for each document
-    const getDocPendingCount = (docId) => {
-        // We'll show this from the selected document stats
-        return null;
+    const getRoleBadge = (role) => {
+        const style = role === 'admin'
+            ? { background: '#e0e7ff', color: '#4338ca' }
+            : { background: '#f3f4f6', color: '#4b5563' };
+
+        return (
+            <span style={{
+                ...style,
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: 600,
+                textTransform: 'uppercase'
+            }}>
+                {role}
+            </span>
+        );
     };
 
     return (
@@ -177,10 +267,10 @@ function DashboardPage() {
             <div className="flex justify-between items-center" style={{ marginBottom: '32px' }}>
                 <div>
                     <h1>Dashboard</h1>
-                    <p>Manage your documents, view print history, and configure credentials.</p>
+                    <p>Manage your documents, view print history, and configure users.</p>
                 </div>
 
-                {/* Stripe-style Segmented Control / Tabs */}
+                {/* Tab Navigation */}
                 <div style={{
                     background: 'rgba(0,0,0,0.04)',
                     padding: '4px',
@@ -222,235 +312,319 @@ function DashboardPage() {
                         Print History
                     </button>
                     <button
-                        onClick={() => setActiveTab('credentials')}
+                        onClick={() => setActiveTab('users')}
                         style={{
                             padding: '6px 16px',
-                            background: activeTab === 'credentials' ? 'white' : 'transparent',
+                            background: activeTab === 'users' ? 'white' : 'transparent',
                             borderRadius: '6px',
-                            boxShadow: activeTab === 'credentials' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+                            boxShadow: activeTab === 'users' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
                             border: 'none',
                             fontWeight: 500,
-                            color: activeTab === 'credentials' ? 'var(--text-main)' : 'var(--text-secondary)',
+                            color: activeTab === 'users' ? 'var(--text-main)' : 'var(--text-secondary)',
                             fontSize: '13px',
                             cursor: 'pointer',
                             transition: 'all 0.2s'
                         }}
                     >
-                        Credentials
+                        Users
                     </button>
                 </div>
             </div>
 
-            {/* Credentials Tab */}
-            {activeTab === 'credentials' && (
-                <div className="card" style={{ maxWidth: '500px' }}>
-                    <div style={{ marginBottom: '24px' }}>
-                        <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>User Credentials</h3>
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
-                            Store your credentials locally for quick access. These are saved only in your browser.
-                        </p>
-                    </div>
+            {/* Users Tab - Admin & Standard Logic */}
+            {activeTab === 'users' && (
+                <div className="grid" style={{ gridTemplateColumns: currentUser?.role === 'admin' ? '1fr 1fr' : '1fr', gap: '24px' }}>
 
-                    <div style={{ marginBottom: '16px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                            <User size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: '-2px' }} />
-                            Username
-                        </label>
-                        <input
-                            type="text"
-                            className="input"
-                            value={credentials.username}
-                            onChange={(e) => setCredentials({ ...credentials, username: e.target.value })}
-                            placeholder="Enter username"
-                            style={{ width: '100%' }}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: '24px' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-secondary)' }}>
-                            <Key size={14} style={{ display: 'inline', marginRight: '6px', verticalAlign: '-2px' }} />
-                            Password
-                        </label>
-                        <div style={{ position: 'relative' }}>
-                            <input
-                                type={showPassword ? 'text' : 'password'}
-                                className="input"
-                                value={credentials.password}
-                                onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                                placeholder="Enter password"
-                                style={{ width: '100%', paddingRight: '80px' }}
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                style={{
-                                    position: 'absolute',
-                                    right: '12px',
-                                    top: '50%',
-                                    transform: 'translateY(-50%)',
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'var(--primary)',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: 500
-                                }}
-                            >
-                                {showPassword ? 'Hide' : 'Show'}
-                            </button>
+                    {/* Admin: User List */}
+                    {currentUser?.role === 'admin' && (
+                        <div className="card">
+                            <h3 style={{ marginBottom: '20px' }}>Managed Users</h3>
+                            <table style={{ margin: 0 }}>
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th style={{ textAlign: 'right' }}>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map((user, idx) => (
+                                        <tr key={idx}>
+                                            <td style={{ fontWeight: 500 }}>
+                                                <div className="flex items-center">
+                                                    <User size={14} style={{ marginRight: '8px', opacity: 0.6 }} />
+                                                    {user.username}
+                                                    {user.username === currentUser.username && (
+                                                        <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: '6px' }}>(You)</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td>{getRoleBadge(user.role)}</td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    className="btn btn-secondary"
+                                                    style={{ padding: '4px 8px', fontSize: '11px', marginRight: '6px' }}
+                                                    onClick={() => handleResetPassword(user.username)}
+                                                >
+                                                    Reset Pass
+                                                </button>
+                                                {user.username !== currentUser.username && (
+                                                    <button
+                                                        className="btn"
+                                                        style={{ color: 'var(--error)', padding: '4px' }}
+                                                        onClick={() => handleDeleteUser(user.username)}
+                                                        title="Delete User"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
+                    )}
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={saveCredentials}
-                        style={{ width: '100%' }}
-                    >
-                        {credentialsSaved ? '✓ Saved!' : 'Save Credentials'}
-                    </button>
+                    {/* Right Column: Profile or Add User */}
+                    <div>
+                        {/* Status Message */}
+                        {message.text && (
+                            <div className={`status-${message.type}`} style={{ padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px' }}>
+                                {message.text}
+                            </div>
+                        )}
 
-                    <div style={{
-                        marginTop: '16px',
-                        padding: '12px',
-                        background: 'rgba(99, 91, 255, 0.05)',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        color: 'var(--text-secondary)'
-                    }}>
-                        <strong>Note:</strong> Credentials are stored locally in your browser and never sent to any server.
+                        {/* Admin: Add New User Form */}
+                        {currentUser?.role === 'admin' && (
+                            <div className="card" style={{ marginBottom: '24px' }}>
+                                <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center' }}>
+                                    <div style={{ background: 'rgba(99, 91, 255, 0.1)', padding: '8px', borderRadius: '8px', marginRight: '12px', color: 'var(--primary)' }}>
+                                        <UserPlus size={20} />
+                                    </div>
+                                    <div>
+                                        <h3 style={{ fontSize: '16px', margin: 0 }}>Create New User</h3>
+                                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Add authorized operators</div>
+                                    </div>
+                                </div>
+                                <form onSubmit={handleAddUser}>
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label className="label">Username</label>
+                                        <input type="text" className="input" style={{ width: '100%' }}
+                                            value={newUser.username} onChange={e => setNewUser({ ...newUser, username: e.target.value })} />
+                                    </div>
+                                    <div style={{ marginBottom: '12px' }}>
+                                        <label className="label">Password</label>
+                                        <input type="password" className="input" style={{ width: '100%' }}
+                                            value={newUser.password} onChange={e => setNewUser({ ...newUser, password: e.target.value })} />
+                                    </div>
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <label className="label">Role</label>
+                                        <select className="input" style={{ width: '100%' }}
+                                            value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
+                                            <option value="user">User (Scan & Print)</option>
+                                            <option value="admin">Admin (Full Access)</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>Create User</button>
+                                </form>
+                            </div>
+                        )}
+
+                        {/* Change Password Form (Visible to All) */}
+                        <div className="card">
+                            <div style={{ marginBottom: '20px', display: 'flex', alignItems: 'center' }}>
+                                <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '8px', borderRadius: '8px', marginRight: '12px', color: '#10b981' }}>
+                                    <Shield size={20} />
+                                </div>
+                                <div>
+                                    <h3 style={{ fontSize: '16px', margin: 0 }}>Security</h3>
+                                    <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Change your password</div>
+                                </div>
+                            </div>
+                            <form onSubmit={handleChangeOwnPassword}>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label className="label">Current Password</label>
+                                    <input type="password" className="input" style={{ width: '100%' }}
+                                        value={changePassword.current} onChange={e => setChangePassword({ ...changePassword, current: e.target.value })} />
+                                </div>
+                                <div style={{ marginBottom: '12px' }}>
+                                    <label className="label">New Password</label>
+                                    <input type="password" className="input" style={{ width: '100%' }}
+                                        value={changePassword.new} onChange={e => setChangePassword({ ...changePassword, new: e.target.value })} />
+                                </div>
+                                <div style={{ marginBottom: '20px' }}>
+                                    <label className="label">Confirm New Password</label>
+                                    <input type="password" className="input" style={{ width: '100%' }}
+                                        value={changePassword.confirm} onChange={e => setChangePassword({ ...changePassword, confirm: e.target.value })} />
+                                </div>
+                                <button type="submit" className="btn btn-secondary" style={{ width: '100%' }}>Update Password</button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             )}
 
-            {/* Documents and History Tabs */}
-            {activeTab !== 'credentials' && (
+            {/* Documents and History Content */}
+            {activeTab !== 'users' && (
                 <div className="grid" style={{ gridTemplateColumns: selectedDoc ? '1fr 380px' : '1fr', transition: 'grid-template-columns 0.3s ease' }}>
 
                     {/* Main Content Card */}
                     <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
                         {isLoading ? (
                             <div className="text-center" style={{ padding: '60px' }}>
-                                <div className="spinner"></div> {/* Add spinner CSS later or just text */}
+                                <div className="spinner"></div>
                                 <p>Loading data...</p>
                             </div>
                         ) : (
-                            <table style={{ margin: 0 }}>
-                                <thead style={{ background: '#fcfcfd', borderBottom: '1px solid var(--divide)' }}>
-                                    {activeTab === 'documents' ? (
-                                        <tr>
-                                            <th style={{ paddingLeft: '24px' }}>Name</th>
-                                            <th>Date Uploaded</th>
-                                            <th className="text-center">Pages</th>
-                                            <th>Status</th>
-                                            <th style={{ paddingRight: '24px', textAlign: 'right' }}>Actions</th>
-                                        </tr>
-                                    ) : (
-                                        <tr>
-                                            <th style={{ paddingLeft: '24px' }}>Status</th>
-                                            <th>Document</th>
-                                            <th>Printer Details</th>
-                                            <th style={{ paddingRight: '24px' }}>Time</th>
-                                        </tr>
-                                    )}
-                                </thead>
-                                <tbody>
-                                    {activeTab === 'documents' ? (
-                                        documents.map(doc => (
-                                            <tr
-                                                key={doc.id}
-                                                onClick={() => handleRowClick(doc.id)}
-                                                style={{
-                                                    cursor: 'pointer',
-                                                    background: selectedDoc?.document.id === doc.id ? 'rgba(99,91,255,0.03)' : 'transparent',
-                                                    borderLeft: selectedDoc?.document.id === doc.id ? '3px solid var(--primary)' : '3px solid transparent'
-                                                }}
-                                            >
-                                                <td style={{ paddingLeft: '21px' }}> {/* Compensate for border */}
-                                                    <div className="flex items-center">
-                                                        <div style={{
-                                                            background: 'rgba(99,91,255,0.1)',
-                                                            padding: '8px',
-                                                            borderRadius: '6px',
-                                                            marginRight: '12px'
-                                                        }}>
-                                                            <FileText size={18} color="var(--primary)" />
-                                                        </div>
-                                                        <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{doc.name}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="text-muted" style={{ fontSize: '13px' }}>
-                                                    {new Date(doc.uploaded_at).toLocaleDateString()}
-                                                </td>
-                                                <td className="text-center" style={{ fontFamily: 'monospaced' }}>{doc.pages}</td>
-                                                <td>
-                                                    <span className="status-badge" style={{ background: '#e3f2fd', color: '#0d47a1' }}>
-                                                        {doc.barcodes_found} Barcodes
-                                                    </span>
-                                                </td>
-                                                <td style={{ textAlign: 'right', paddingRight: '24px' }}>
-                                                    <button
-                                                        className="btn"
+                            <>
+                                {activeTab === 'history' && (
+                                    <div className="flex items-center justify-between" style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
+                                        <h3 style={{ margin: 0 }}>Print Job History</h3>
+                                        <button
+                                            onClick={() => api.downloadReport()}
+                                            className="btn btn-secondary"
+                                            title="Download as CSV"
+                                        >
+                                            <Download size={16} style={{ marginRight: '8px' }} />
+                                            Download Report
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div style={{ overflowX: 'auto' }}>
+                                    <table style={{ margin: 0 }}>
+                                        <thead style={{ background: '#fcfcfd', borderBottom: '1px solid var(--divide)' }}>
+                                            {activeTab === 'documents' ? (
+                                                <tr>
+                                                    <th style={{ paddingLeft: '24px' }}>Name</th>
+                                                    <th>Date Uploaded</th>
+                                                    <th className="text-center">Pages</th>
+                                                    <th>Status</th>
+                                                    <th style={{ paddingRight: '24px', textAlign: 'right' }}>Actions</th>
+                                                </tr>
+                                            ) : (
+                                                <tr>
+                                                    <th style={{ paddingLeft: '24px' }}>Time</th>
+                                                    <th>Document</th>
+                                                    <th>Barcode/Page</th>
+                                                    <th>User</th>
+                                                    <th>Printer</th>
+                                                    <th style={{ paddingRight: '24px' }}>Status</th>
+                                                </tr>
+                                            )}
+                                        </thead>
+                                        <tbody>
+                                            {activeTab === 'documents' ? (
+                                                documents.map(doc => (
+                                                    <tr
+                                                        key={doc.id}
+                                                        onClick={() => handleRowClick(doc.id)}
                                                         style={{
-                                                            color: 'var(--text-secondary)',
-                                                            padding: '6px',
-                                                            height: 'auto',
-                                                            background: 'transparent',
-                                                            boxShadow: 'none'
+                                                            cursor: 'pointer',
+                                                            background: selectedDoc?.document.id === doc.id ? 'rgba(99,91,255,0.03)' : 'transparent',
+                                                            borderLeft: selectedDoc?.document.id === doc.id ? '3px solid var(--primary)' : '3px solid transparent'
                                                         }}
-                                                        onClick={(e) => handleDelete(e, doc.id)}
-                                                        title="Delete"
                                                     >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        history.map(job => (
-                                            <tr key={job.id}>
-                                                <td style={{ paddingLeft: '24px' }}>
-                                                    {job.status === 'success' ? (
-                                                        <span className="status-badge status-success">
-                                                            <CheckCircle size={12} style={{ marginRight: '4px' }} /> Succeeded
-                                                        </span>
-                                                    ) : (
-                                                        <span className="status-badge status-error">
-                                                            <XCircle size={12} style={{ marginRight: '4px' }} /> Failed
-                                                        </span>
-                                                    )}
-                                                </td>
-                                                <td>
-                                                    <div style={{ fontWeight: 500 }}>{job.doc_name}</div>
-                                                    <div className="text-muted" style={{ fontSize: '12px' }}>Page {job.page_num}</div>
-                                                </td>
-                                                <td>
-                                                    <div className="flex items-center text-muted" style={{ fontSize: '13px' }}>
-                                                        <Printer size={12} />
-                                                        <span>{job.printer}</span>
-                                                    </div>
-                                                    {job.error && (
-                                                        <div style={{ color: 'var(--error)', fontSize: '11px', marginTop: '4px' }}>
-                                                            {job.error}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="text-muted" style={{ fontSize: '13px', paddingRight: '24px' }}>
-                                                    {new Date(job.timestamp).toLocaleString(undefined, {
-                                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                                    })}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                    {((activeTab === 'documents' && documents.length === 0) || (activeTab === 'history' && history.length === 0)) && (
-                                        <tr>
-                                            <td colSpan="5" className="text-center" style={{ padding: '60px' }}>
-                                                <div style={{ color: 'var(--text-secondary)' }}>No items found.</div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                                        <td style={{ paddingLeft: '21px' }}> {/* Compensate for border */}
+                                                            <div className="flex items-center">
+                                                                <div style={{
+                                                                    background: 'rgba(99,91,255,0.1)',
+                                                                    padding: '8px',
+                                                                    borderRadius: '6px',
+                                                                    marginRight: '12px'
+                                                                }}>
+                                                                    <FileText size={18} color="var(--primary)" />
+                                                                </div>
+                                                                <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{doc.name}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="text-muted" style={{ fontSize: '13px' }}>
+                                                            {new Date(doc.uploaded_at).toLocaleDateString()}
+                                                        </td>
+                                                        <td className="text-center" style={{ fontFamily: 'monospaced' }}>{doc.pages}</td>
+                                                        <td>
+                                                            <span className="status-badge" style={{ background: '#e3f2fd', color: '#0d47a1' }}>
+                                                                {doc.barcodes_found} Barcodes
+                                                            </span>
+                                                        </td>
+                                                        <td style={{ textAlign: 'right', paddingRight: '24px' }}>
+                                                            <button
+                                                                className="btn"
+                                                                style={{
+                                                                    color: 'var(--text-secondary)',
+                                                                    padding: '6px',
+                                                                    height: 'auto',
+                                                                    background: 'transparent',
+                                                                    boxShadow: 'none'
+                                                                }}
+                                                                onClick={(e) => handleDelete(e, doc.id)}
+                                                                title="Delete"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            ) : (
+                                                history.map((job) => (
+                                                    <tr key={job.id}>
+                                                        <td style={{ paddingLeft: '24px' }}>
+                                                            <div className="flex items-center text-muted">
+                                                                <Clock size={14} style={{ marginRight: '6px' }} />
+                                                                {new Date(job.timestamp).toLocaleString()}
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center">
+                                                                <FileText size={16} color="var(--primary)" style={{ marginRight: '8px' }} />
+                                                                <span style={{ fontWeight: 500 }}>
+                                                                    {job.doc_name || 'Unknown'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center" style={{ fontFamily: 'monospace' }}>
+                                                                <Barcode size={16} style={{ marginRight: '8px', opacity: 0.5 }} />
+                                                                <span className="status-badge" style={{ background: '#f1f5f9', color: '#64748b' }}>
+                                                                    Page {job.page_num}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td>
+                                                            <div className="flex items-center">
+                                                                <User size={14} style={{ marginRight: '6px', opacity: 0.5 }} />
+                                                                {job.username || 'Unknown'}
+                                                            </div>
+                                                        </td>
+                                                        <td>{job.printer}</td>
+                                                        <td style={{ paddingRight: '24px' }}>
+                                                            {job.status === 'success' ? (
+                                                                <span className="status-badge status-success">
+                                                                    <CheckCircle size={12} /> Success
+                                                                </span>
+                                                            ) : (
+                                                                <div className="flex items-center" title={job.error}>
+                                                                    <span className="status-badge status-error">
+                                                                        <XCircle size={12} /> Failed
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
+                                            {((activeTab === 'documents' && documents.length === 0) || (activeTab === 'history' && history.length === 0)) && (
+                                                <tr>
+                                                    <td colSpan="6" className="text-center" style={{ padding: '60px' }}>
+                                                        <div style={{ color: 'var(--text-secondary)' }}>No items found.</div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </>
                         )}
                     </div>
 
