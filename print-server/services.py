@@ -9,7 +9,7 @@ import platform
 import subprocess
 from reportlab.lib.units import inch
 from reportlab.pdfgen import canvas
-from PIL import Image
+from PIL import Image, ImageFilter, ImageEnhance
 import threading
 import datetime
 import hashlib
@@ -427,13 +427,24 @@ class PrintService:
             with open(temp_filename, 'wb') as f:
                 f.write(pdf_bytes)
                 
-            # 3. Send to printer (platform specific)
+            # 3. Extract quality settings from label_settings
+            quality_settings = {
+                'dpi': label_settings.get('dpi', 600),
+                'color_mode': label_settings.get('color_mode', 'grayscale'),
+                'sharpening': label_settings.get('sharpening', True),
+                'resampling': label_settings.get('resampling', 'lanczos'),
+                'contrast': label_settings.get('contrast', 1.0),
+                'threshold': label_settings.get('threshold', 128)
+            }
+            logger.info(f"Print quality settings: {quality_settings}")
+            
+            # 4. Send to printer (platform specific)
             system = platform.system()
             
             if system == 'Windows':
                 if WINDOWS_PRINT_AVAILABLE:
                     # Use native win32print for reliable Windows printing
-                    success, message = self._print_windows_native(temp_filename, printer_name)
+                    success, message = self._print_windows_native(temp_filename, printer_name, quality_settings)
                 else:
                     # Fallback to Powershell
                     success, message = self._print_windows_powershell(temp_filename, printer_name)
@@ -472,15 +483,28 @@ class PrintService:
             self._log_job(job_id, file_id, doc_name if 'doc_name' in locals() else 'Unknown', page_num, printer_name, status, timestamp, message, username=username)
             return False, message
 
-    def _print_windows_native(self, pdf_path, printer_name=None):
-        """Print using win32print (native GDI) - Most Reliable Method"""
+    def _print_windows_native(self, pdf_path, printer_name=None, quality_settings=None):
+        """Print using win32print (native GDI) - Most Reliable Method
+        
+        quality_settings can include:
+        - dpi: 150, 300, 600 (default: 600 for best quality)
+        - color_mode: 'rgb', 'grayscale', 'monochrome' (default: 'grayscale')
+        - sharpening: True/False (default: True)
+        - resampling: 'lanczos', 'bicubic', 'bilinear' (default: 'lanczos')
+        """
+        if quality_settings is None:
+            quality_settings = {}
+        
         try:
-            # Convert PDF to Image first
-            image = self._pdf_to_image(pdf_path)
+            # Convert PDF to Image first with quality settings
+            image = self._pdf_to_image(pdf_path, quality_settings)
             if image is None:
                 # Fallback to Powershell if conversion fails
                 logger.warning("PDF to Image conversion failed, falling back to Powershell")
                 return self._print_windows_powershell(pdf_path, printer_name)
+            
+            # Apply image quality enhancements
+            image = self._apply_quality_enhancements(image, quality_settings)
             
             # Get printer
             if not printer_name:
@@ -494,7 +518,16 @@ class PrintService:
             ratio = min(printable_area[0] / image.size[0], printable_area[1] / image.size[1])
             scaled_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
             
-            bmp = image.resize(scaled_size)
+            # Use high-quality resampling based on settings
+            resampling_mode = self._get_resampling_mode(quality_settings.get('resampling', 'lanczos'))
+            bmp = image.resize(scaled_size, resampling_mode)
+            
+            # Convert to RGB for DIB if in grayscale/monochrome mode
+            if bmp.mode == '1':
+                bmp = bmp.convert('L').convert('RGB')
+            elif bmp.mode == 'L':
+                bmp = bmp.convert('RGB')
+            
             dib = ImageWin.Dib(bmp)
             
             hDC.StartDoc("Barcode Label")
@@ -513,8 +546,52 @@ class PrintService:
             # Fallback to Powershell
             return self._print_windows_powershell(pdf_path, printer_name)
 
-    def _pdf_to_image(self, pdf_path):
-        """Convert first page of PDF to PIL Image"""
+    def _get_resampling_mode(self, mode_name):
+        """Get PIL resampling filter from name"""
+        modes = {
+            'lanczos': Image.Resampling.LANCZOS,
+            'bicubic': Image.Resampling.BICUBIC,
+            'bilinear': Image.Resampling.BILINEAR,
+            'nearest': Image.Resampling.NEAREST
+        }
+        return modes.get(mode_name.lower(), Image.Resampling.LANCZOS)
+    
+    def _apply_quality_enhancements(self, image, quality_settings):
+        """Apply quality enhancements to the image before printing"""
+        if quality_settings is None:
+            quality_settings = {}
+        
+        # Apply sharpening if enabled (default: True for label printers)
+        if quality_settings.get('sharpening', True):
+            # Use UnsharpMask for better results on barcodes
+            image = image.filter(ImageFilter.UnsharpMask(radius=1, percent=50, threshold=3))
+        
+        # Apply contrast enhancement if specified
+        contrast = quality_settings.get('contrast', 1.0)
+        if contrast != 1.0:
+            enhancer = ImageEnhance.Contrast(image)
+            image = enhancer.enhance(contrast)
+        
+        # Convert to appropriate color mode
+        color_mode = quality_settings.get('color_mode', 'grayscale')
+        if color_mode == 'monochrome':
+            # Convert to pure black and white - best for thermal printers
+            image = image.convert('L')  # First to grayscale
+            # Apply threshold for crisp black/white
+            threshold = quality_settings.get('threshold', 128)
+            image = image.point(lambda x: 0 if x < threshold else 255, '1')
+        elif color_mode == 'grayscale':
+            if image.mode != 'L':
+                image = image.convert('L')
+        # else keep as RGB
+        
+        return image
+    
+    def _pdf_to_image(self, pdf_path, quality_settings=None):
+        """Convert first page of PDF to PIL Image with quality settings"""
+        if quality_settings is None:
+            quality_settings = {}
+        
         try:
             from pdf2image import convert_from_path
             import sys
@@ -530,16 +607,21 @@ class PrintService:
                     poppler_path = os.path.join(os.path.dirname(sys.executable), 'poppler')
                 logger.info(f"Using bundled Poppler at: {poppler_path}")
             
-            # Convert PDF to image
+            # Use DPI from quality settings, default to 600 for high quality
+            dpi = quality_settings.get('dpi', 600)
+            logger.info(f"Converting PDF to image at {dpi} DPI")
+            
+            # Convert PDF to image with high DPI
             images = convert_from_path(
                 pdf_path, 
-                dpi=300, 
+                dpi=dpi, 
                 first_page=1, 
                 last_page=1,
                 poppler_path=poppler_path
             )
             if images:
                 img = images[0]
+                # Keep in RGB for now, color conversion happens in quality enhancement step
                 if img.mode != 'RGB':
                     img = img.convert('RGB')
                 return img

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye, Printer } from 'lucide-react';
+import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye, Printer, Zap, Sliders } from 'lucide-react';
 import { api } from '../api';
 
 function SettingsPage() {
@@ -20,7 +20,13 @@ function SettingsPage() {
         offsetX: 0,       // inches from left
         offsetY: 0,       // inches from top
         scale: 100,       // percentage (50-200)
-        dpi: 300
+        dpi: 600,         // Higher default for better quality
+        // Print Quality Settings
+        color_mode: 'grayscale',  // rgb, grayscale, monochrome
+        sharpening: true,         // Apply sharpening filter
+        resampling: 'lanczos',    // lanczos (best), bicubic, bilinear, nearest
+        contrast: 1.0,            // 0.5 to 2.0
+        threshold: 128            // For monochrome mode (0-255)
     });
 
     // Auto-print settings
@@ -128,7 +134,24 @@ function SettingsPage() {
     };
 
     const updateLabelSetting = (key, value) => {
-        setLabelSettings(prev => ({ ...prev, [key]: parseFloat(value) || 0 }));
+        // Handle different types properly
+        let processedValue = value;
+
+        // String fields that shouldn't be parsed as numbers
+        const stringFields = ['color_mode', 'resampling'];
+        // Boolean fields
+        const booleanFields = ['sharpening'];
+
+        if (stringFields.includes(key)) {
+            processedValue = value; // Keep as string
+        } else if (booleanFields.includes(key)) {
+            processedValue = value; // Keep as boolean
+        } else {
+            // Parse as number
+            processedValue = parseFloat(value) || 0;
+        }
+
+        setLabelSettings(prev => ({ ...prev, [key]: processedValue }));
     };
 
     // Generate preview URL with label settings as query params
@@ -350,6 +373,177 @@ function SettingsPage() {
                             <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
                                 Shrink (&lt;100%) or expand (&gt;100%) the content to fit your label.
                             </p>
+                        </div>
+                    </div>
+
+                    {/* Print Quality Settings - NEW */}
+                    <div className="card" style={{ marginBottom: '24px' }}>
+                        <div className="flex items-center" style={{ marginBottom: '16px' }}>
+                            <Zap size={20} color="var(--primary)" style={{ marginRight: '10px' }} />
+                            <h3 style={{ fontSize: '16px', margin: 0 }}>Print Quality</h3>
+                        </div>
+
+                        <p className="text-muted" style={{ fontSize: '13px', marginBottom: '16px' }}>
+                            Optimize print output for your Brady label printer. Higher quality = slower printing.
+                        </p>
+
+                        {/* Color Mode */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 500 }}>Color Mode</label>
+                            <select
+                                className="input"
+                                value={labelSettings.color_mode}
+                                onChange={(e) => updateLabelSetting('color_mode', e.target.value)}
+                                style={{ width: '100%', marginTop: '4px' }}
+                            >
+                                <option value="rgb">RGB (Full Color)</option>
+                                <option value="grayscale">Grayscale (Recommended)</option>
+                                <option value="monochrome">Monochrome (Best for Thermal)</option>
+                            </select>
+                            <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                                Grayscale is best for most label printers. Use Monochrome for pure B&W thermal printers.
+                            </p>
+                        </div>
+
+                        {/* Threshold for Monochrome */}
+                        {labelSettings.color_mode === 'monochrome' && (
+                            <div style={{ marginBottom: '16px' }}>
+                                <label style={{ fontSize: '12px', fontWeight: 500 }}>
+                                    B/W Threshold: {labelSettings.threshold}
+                                </label>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Dark</span>
+                                    <input
+                                        type="range"
+                                        min="50"
+                                        max="200"
+                                        step="5"
+                                        value={labelSettings.threshold}
+                                        onChange={(e) => updateLabelSetting('threshold', parseInt(e.target.value))}
+                                        style={{ flex: 1 }}
+                                    />
+                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Light</span>
+                                </div>
+                                <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                                    Lower = more black, Higher = more white. Default 128 is usually best.
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Resampling Algorithm */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 500 }}>Resampling Quality</label>
+                            <select
+                                className="input"
+                                value={labelSettings.resampling}
+                                onChange={(e) => updateLabelSetting('resampling', e.target.value)}
+                                style={{ width: '100%', marginTop: '4px' }}
+                            >
+                                <option value="lanczos">Lanczos (Best Quality)</option>
+                                <option value="bicubic">Bicubic (Good)</option>
+                                <option value="bilinear">Bilinear (Fast)</option>
+                                <option value="nearest">Nearest (Fastest)</option>
+                            </select>
+                            <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                                Lanczos provides the sharpest barcodes and text. Use faster options if printing is slow.
+                            </p>
+                        </div>
+
+                        {/* Sharpening Toggle */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                cursor: 'pointer',
+                                padding: '12px',
+                                background: labelSettings.sharpening ? 'rgba(99, 91, 255, 0.08)' : '#f8f9fa',
+                                borderRadius: '8px',
+                                border: labelSettings.sharpening ? '1px solid rgba(99, 91, 255, 0.3)' : '1px solid var(--border)'
+                            }}>
+                                <input
+                                    type="checkbox"
+                                    checked={labelSettings.sharpening}
+                                    onChange={(e) => updateLabelSetting('sharpening', e.target.checked)}
+                                    style={{ width: '18px', height: '18px' }}
+                                />
+                                <div>
+                                    <div style={{ fontWeight: 500, fontSize: '13px' }}>Enable Sharpening</div>
+                                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                        Improves barcode and text clarity (recommended)
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+
+                        {/* Contrast Slider */}
+                        <div style={{ marginBottom: '16px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: 500 }}>
+                                Contrast: {labelSettings.contrast.toFixed(1)}x
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>0.5</span>
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="2.0"
+                                    step="0.1"
+                                    value={labelSettings.contrast}
+                                    onChange={(e) => updateLabelSetting('contrast', parseFloat(e.target.value))}
+                                    style={{ flex: 1 }}
+                                />
+                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>2.0</span>
+                            </div>
+                            <p className="text-muted" style={{ fontSize: '11px', marginTop: '4px' }}>
+                                1.0 = no change. Increase for bolder barcodes, decrease for lighter prints.
+                            </p>
+                        </div>
+
+                        {/* Quality Preset Buttons */}
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ flex: 1, fontSize: '12px' }}
+                                onClick={() => setLabelSettings(prev => ({
+                                    ...prev,
+                                    dpi: 300,
+                                    color_mode: 'grayscale',
+                                    sharpening: false,
+                                    resampling: 'bilinear',
+                                    contrast: 1.0
+                                }))}
+                            >
+                                ⚡ Fast
+                            </button>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ flex: 1, fontSize: '12px' }}
+                                onClick={() => setLabelSettings(prev => ({
+                                    ...prev,
+                                    dpi: 600,
+                                    color_mode: 'grayscale',
+                                    sharpening: true,
+                                    resampling: 'lanczos',
+                                    contrast: 1.0
+                                }))}
+                            >
+                                ✨ Optimal
+                            </button>
+                            <button
+                                className="btn btn-secondary"
+                                style={{ flex: 1, fontSize: '12px' }}
+                                onClick={() => setLabelSettings(prev => ({
+                                    ...prev,
+                                    dpi: 600,
+                                    color_mode: 'monochrome',
+                                    sharpening: true,
+                                    resampling: 'lanczos',
+                                    contrast: 1.2,
+                                    threshold: 128
+                                }))}
+                            >
+                                🏷️ Thermal
+                            </button>
                         </div>
                     </div>
 
