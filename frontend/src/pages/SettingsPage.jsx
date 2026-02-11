@@ -4,7 +4,7 @@ import { api } from '../api';
 
 function SettingsPage() {
     // Server settings
-    const [serverUrl, setServerUrl] = useState('http://localhost:5001');
+    const [serverUrl, setServerUrl] = useState('http://10.142.190.195:5001');
     const [status, setStatus] = useState('idle');
     const [message, setMessage] = useState('');
 

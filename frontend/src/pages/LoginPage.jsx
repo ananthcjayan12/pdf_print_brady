@@ -9,6 +9,7 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [serverUrl, setServerUrl] = useState('http://10.142.190.195:5001');
 
     useEffect(() => {
         // If already logged in, redirect to home
@@ -21,13 +22,30 @@ function LoginPage() {
                 navigate('/');
             }
         }
+
+        const storedUrl = localStorage.getItem('api_url');
+        if (storedUrl) setServerUrl(storedUrl);
     }, [navigate]);
+
+    const handleSaveServerUrl = async () => {
+        const url = serverUrl.replace(/\/$/, "");
+        try {
+            const res = await fetch(`${url}/health`);
+            if (!res.ok) throw new Error('Server error');
+            const data = await res.json();
+            if (data.status !== 'ok') throw new Error('Invalid response');
+            localStorage.setItem('api_url', url);
+        } catch (err) {
+            throw err;
+        }
+    };
 
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
         try {
+            await handleSaveServerUrl();
             const result = await api.login(username, password);
             if (result.success) {
                 sessionStorage.setItem('auth_session', JSON.stringify({
@@ -42,7 +60,8 @@ function LoginPage() {
             }
         } catch (err) {
             const serverError = err?.response?.data?.error;
-            setError(serverError || 'Unable to reach server. Please check Settings.');
+            const localError = err?.message === 'Server error' ? 'Server error' : null;
+            setError(serverError || localError || 'Unable to reach server. Please check the Server URL.');
             setIsLoading(false);
         }
     };
@@ -82,6 +101,20 @@ function LoginPage() {
                 </div>
 
                 <form onSubmit={handleLogin}>
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                            Server URL
+                        </label>
+                        <input
+                            type="text"
+                            className="input"
+                            value={serverUrl}
+                            onChange={(e) => setServerUrl(e.target.value)}
+                            placeholder="http://localhost:5001"
+                            style={{ height: '44px' }}
+                        />
+                    </div>
+
                     <div style={{ marginBottom: '20px' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>
                             Username
