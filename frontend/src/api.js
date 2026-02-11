@@ -29,6 +29,15 @@ export const api = {
         return res.data;
     },
 
+    // Auth
+    login: async (username, password) => {
+        const res = await axios.post(`${getBaseUrl()}/api/auth/login`, {
+            username,
+            password
+        });
+        return res.data;
+    },
+
     // Scan Barcode - now returns print_count and last_print info
     scanBarcode: async (barcode) => {
         const res = await axios.get(`${getBaseUrl()}/api/scan/${encodeURIComponent(barcode)}`);
@@ -88,6 +97,41 @@ export const api = {
     // Get available printers
     getPrinters: async () => {
         const res = await axios.get(`${getBaseUrl()}/api/printers`);
+        return res.data;
+    },
+
+    // User management
+    getUsers: async () => {
+        const res = await axios.get(`${getBaseUrl()}/api/users`);
+        return res.data;
+    },
+
+    addUser: async (username, password, role) => {
+        const res = await axios.post(`${getBaseUrl()}/api/users`, {
+            username,
+            password,
+            role
+        });
+        return res.data;
+    },
+
+    deleteUser: async (username) => {
+        const res = await axios.delete(`${getBaseUrl()}/api/users/${encodeURIComponent(username)}`);
+        return res.data;
+    },
+
+    resetUserPassword: async (username, newPassword) => {
+        const res = await axios.put(`${getBaseUrl()}/api/users/${encodeURIComponent(username)}/password`, {
+            new_password: newPassword
+        });
+        return res.data;
+    },
+
+    changeUserPassword: async (username, currentPassword, newPassword) => {
+        const res = await axios.put(`${getBaseUrl()}/api/users/${encodeURIComponent(username)}/change-password`, {
+            current_password: currentPassword,
+            new_password: newPassword
+        });
         return res.data;
     },
 

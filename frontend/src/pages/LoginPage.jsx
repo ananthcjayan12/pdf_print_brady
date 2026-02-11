@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, Key, ArrowRight } from 'lucide-react';
+import { api } from '../api';
 
 function LoginPage() {
     const navigate = useNavigate();
@@ -20,68 +21,28 @@ function LoginPage() {
                 navigate('/');
             }
         }
-
-        // --- MIGRATION & INITIALIZATION LOGIC ---
-        const users = localStorage.getItem('users');
-        const oldCreds = localStorage.getItem('user_credentials');
-
-        if (!users) {
-            if (oldCreds) {
-                // Migrate old single-user credential to new array format as Admin
-                try {
-                    const parsedOld = JSON.parse(oldCreds);
-                    const newUsers = [{
-                        username: parsedOld.username || 'admin',
-                        password: parsedOld.password || 'admin',
-                        role: 'admin' // Grant admin to existing user
-                    }];
-                    localStorage.setItem('users', JSON.stringify(newUsers));
-                    localStorage.removeItem('user_credentials'); // Clean up
-                } catch (e) {
-                    console.error('Migration failed, resetting to default', e);
-                    initializeDefault();
-                }
-            } else {
-                // No data at all, initialize default admin
-                initializeDefault();
-            }
-        }
     }, [navigate]);
 
-    const initializeDefault = () => {
-        localStorage.setItem('users', JSON.stringify([{
-            username: 'admin',
-            password: 'admin',
-            role: 'admin'
-        }]));
-    };
-
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
-
         try {
-            // Simulate network delay for feel
-            setTimeout(() => {
-                const users = JSON.parse(localStorage.getItem('users') || '[]');
-                const user = users.find(u => u.username === username && u.password === password);
-
-                if (user) {
-                    // Login Success
-                    sessionStorage.setItem('auth_session', JSON.stringify({
-                        username: user.username,
-                        role: user.role, // Store role in session
-                        loginFullTime: new Date().toISOString()
-                    }));
-                    navigate(user.role === 'uploader' ? '/upload' : '/');
-                } else {
-                    setError('Invalid username or password');
-                    setIsLoading(false);
-                }
-            }, 600);
+            const result = await api.login(username, password);
+            if (result.success) {
+                sessionStorage.setItem('auth_session', JSON.stringify({
+                    username: result.user.username,
+                    role: result.user.role,
+                    loginFullTime: new Date().toISOString()
+                }));
+                navigate(result.user.role === 'uploader' ? '/upload' : '/');
+            } else {
+                setError(result.error || 'Invalid username or password');
+                setIsLoading(false);
+            }
         } catch (err) {
-            setError('An error occurred. Please clear browser data.');
+            const serverError = err?.response?.data?.error;
+            setError(serverError || 'Unable to reach server. Please check Settings.');
             setIsLoading(false);
         }
     };

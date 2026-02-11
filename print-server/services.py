@@ -35,8 +35,10 @@ class PDFProcessingService:
         self.mappings = {}   # Map barcode -> {file_id, page_num, etc}
         self.hashes = {}     # Map hash -> file_id
         self.print_jobs = [] # List of print jobs
+        self.users = []      # List of user accounts
         self.db_path = os.path.join(upload_folder, 'db.json')
         self.load_db()
+        self.ensure_default_admin()
 
     def load_db(self):
         if os.path.exists(self.db_path):
@@ -46,6 +48,7 @@ class PDFProcessingService:
                     self.documents = data.get('documents', {})
                     self.mappings = data.get('mappings', {})
                     self.print_jobs = data.get('print_jobs', [])
+                    self.users = data.get('users', [])
                     # Rebuild hash map
                     self.hashes = {doc['hash']: doc_id for doc_id, doc in self.documents.items() if 'hash' in doc}
             except Exception as e:
@@ -57,10 +60,97 @@ class PDFProcessingService:
                 json.dump({
                     'documents': self.documents,
                     'mappings': self.mappings,
-                    'print_jobs': self.print_jobs
+                    'print_jobs': self.print_jobs,
+                    'users': self.users
                 }, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save DB: {e}")
+
+    def ensure_default_admin(self):
+        if not self.users:
+            self.users = [
+                {
+                    'username': 'admin',
+                    'password': 'admin',
+                    'role': 'admin'
+                }
+            ]
+            self.save_db()
+
+    def get_public_users(self):
+        return [
+            {
+                'username': user.get('username', ''),
+                'role': user.get('role', 'user')
+            }
+            for user in self.users
+        ]
+
+    def find_user(self, username):
+        for user in self.users:
+            if user.get('username') == username:
+                return user
+        return None
+
+    def add_user(self, username, password, role):
+        if self.find_user(username):
+            return False, 'Username already exists'
+
+        self.users.append({
+            'username': username,
+            'password': password,
+            'role': role or 'user'
+        })
+        self.save_db()
+        return True, None
+
+    def delete_user(self, username):
+        user = self.find_user(username)
+        if not user:
+            return False, 'User not found'
+
+        if user.get('role') == 'admin':
+            admin_count = sum(1 for u in self.users if u.get('role') == 'admin')
+            if admin_count <= 1:
+                return False, 'Cannot delete the last admin'
+
+        self.users = [u for u in self.users if u.get('username') != username]
+        self.save_db()
+        return True, None
+
+    def reset_user_password(self, username, new_password):
+        user = self.find_user(username)
+        if not user:
+            return False, 'User not found'
+
+        user['password'] = new_password
+        self.save_db()
+        return True, None
+
+    def change_user_password(self, username, current_password, new_password):
+        user = self.find_user(username)
+        if not user:
+            return False, 'User not found'
+
+        if user.get('password') != current_password:
+            return False, 'Current password is incorrect'
+
+        user['password'] = new_password
+        self.save_db()
+        return True, None
+
+    def authenticate_user(self, username, password):
+        user = self.find_user(username)
+        if not user:
+            return None
+
+        if user.get('password') != password:
+            return None
+
+        return {
+            'username': user.get('username', ''),
+            'role': user.get('role', 'user')
+        }
 
     def log_print_job(self, job_data):
         self.print_jobs.append(job_data)

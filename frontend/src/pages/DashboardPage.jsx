@@ -52,7 +52,7 @@ function DashboardPage() {
                 const data = await api.getPrintHistory();
                 if (data.success) setHistory(data.history);
             } else if (activeTab === 'users') {
-                loadUsers();
+                await loadUsers();
             }
         } catch (error) {
             console.error('Failed to load data', error);
@@ -63,84 +63,99 @@ function DashboardPage() {
 
     // --- User Management Logic ---
 
-    const loadUsers = () => {
-        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-        setUsers(storedUsers);
+    const loadUsers = async () => {
+        try {
+            const result = await api.getUsers();
+            if (result.success) {
+                setUsers(result.users || []);
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to load users' });
+            }
+        } catch (error) {
+            console.error('Failed to load users', error);
+            setMessage({ type: 'error', text: 'Failed to load users' });
+        }
     };
 
-    const handleAddUser = (e) => {
+    const handleAddUser = async (e) => {
         e.preventDefault();
         if (!newUser.username || !newUser.password) {
             setMessage({ type: 'error', text: 'Username and password are required' });
             return;
         }
-
-        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-        if (storedUsers.find(u => u.username === newUser.username)) {
-            setMessage({ type: 'error', text: 'Username already exists' });
-            return;
+        try {
+            const result = await api.addUser(newUser.username, newUser.password, newUser.role);
+            if (result.success) {
+                setUsers(result.users || []);
+                setNewUser({ username: '', password: '', role: 'user' });
+                setMessage({ type: 'success', text: 'User added successfully' });
+                setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to add user' });
+            }
+        } catch (error) {
+            console.error('Failed to add user', error);
+            setMessage({ type: 'error', text: 'Failed to add user' });
         }
-
-        const updatedUsers = [...storedUsers, newUser];
-        localStorage.setItem('users', JSON.stringify(updatedUsers));
-        setUsers(updatedUsers);
-        setNewUser({ username: '', password: '', role: 'user' });
-        setMessage({ type: 'success', text: 'User added successfully' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     };
 
-    const handleDeleteUser = (username) => {
+    const handleDeleteUser = async (username) => {
         if (username === currentUser.username) {
             alert("You cannot delete yourself.");
             return;
         }
         if (confirm(`Are you sure you want to delete user "${username}"?`)) {
-            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-            const updatedUsers = storedUsers.filter(u => u.username !== username);
-            localStorage.setItem('users', JSON.stringify(updatedUsers));
-            setUsers(updatedUsers);
+            try {
+                const result = await api.deleteUser(username);
+                if (result.success) {
+                    setUsers(result.users || []);
+                } else {
+                    setMessage({ type: 'error', text: result.error || 'Failed to delete user' });
+                }
+            } catch (error) {
+                console.error('Failed to delete user', error);
+                setMessage({ type: 'error', text: 'Failed to delete user' });
+            }
         }
     };
 
-    const handleResetPassword = (username) => {
+    const handleResetPassword = async (username) => {
         const newPass = prompt(`Enter new password for ${username}:`);
         if (newPass) {
-            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-            const updatedUsers = storedUsers.map(u =>
-                u.username === username ? { ...u, password: newPass } : u
-            );
-            localStorage.setItem('users', JSON.stringify(updatedUsers));
-            setUsers(updatedUsers);
-            setMessage({ type: 'success', text: `Password for ${username} reset successfully` });
-            setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+            try {
+                const result = await api.resetUserPassword(username, newPass);
+                if (result.success) {
+                    setMessage({ type: 'success', text: `Password for ${username} reset successfully` });
+                    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+                } else {
+                    setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
+                }
+            } catch (error) {
+                console.error('Failed to reset password', error);
+                setMessage({ type: 'error', text: 'Failed to reset password' });
+            }
         }
     };
 
-    const handleChangeOwnPassword = (e) => {
+    const handleChangeOwnPassword = async (e) => {
         e.preventDefault();
         if (changePassword.new !== changePassword.confirm) {
             setMessage({ type: 'error', text: 'New passwords do not match' });
             return;
         }
-
-        const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
-        const userIndex = storedUsers.findIndex(u => u.username === currentUser.username);
-
-        if (userIndex === -1) {
-            setMessage({ type: 'error', text: 'User not found' });
-            return;
+        try {
+            const result = await api.changeUserPassword(currentUser.username, changePassword.current, changePassword.new);
+            if (result.success) {
+                setChangePassword({ current: '', new: '', confirm: '' });
+                setMessage({ type: 'success', text: 'Password changed successfully' });
+                setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+            } else {
+                setMessage({ type: 'error', text: result.error || 'Failed to change password' });
+            }
+        } catch (error) {
+            console.error('Failed to change password', error);
+            setMessage({ type: 'error', text: 'Failed to change password' });
         }
-
-        if (storedUsers[userIndex].password !== changePassword.current) {
-            setMessage({ type: 'error', text: 'Current password is incorrect' });
-            return;
-        }
-
-        storedUsers[userIndex].password = changePassword.new;
-        localStorage.setItem('users', JSON.stringify(storedUsers));
-        setChangePassword({ current: '', new: '', confirm: '' });
-        setMessage({ type: 'success', text: 'Password changed successfully' });
-        setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     };
 
     // --- Document Logic ---

@@ -173,6 +173,74 @@ def scan_barcode(barcode):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+    user = pdf_service.authenticate_user(username, password)
+    if not user:
+        return jsonify({'success': False, 'error': 'Invalid username or password'}), 401
+
+    return jsonify({'success': True, 'user': user})
+
+@app.route('/api/users', methods=['GET', 'POST'])
+def users_collection():
+    if request.method == 'GET':
+        return jsonify({'success': True, 'users': pdf_service.get_public_users()})
+
+    data = request.json or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    role = data.get('role') or 'user'
+
+    if not username or not password:
+        return jsonify({'success': False, 'error': 'Username and password are required'}), 400
+
+    success, error = pdf_service.add_user(username, password, role)
+    if not success:
+        return jsonify({'success': False, 'error': error}), 400
+
+    return jsonify({'success': True, 'users': pdf_service.get_public_users()})
+
+@app.route('/api/users/<username>', methods=['DELETE'])
+def delete_user(username):
+    success, error = pdf_service.delete_user(username)
+    if not success:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True, 'users': pdf_service.get_public_users()})
+
+@app.route('/api/users/<username>/password', methods=['PUT'])
+def reset_user_password(username):
+    data = request.json or {}
+    new_password = data.get('new_password') or ''
+
+    if not new_password:
+        return jsonify({'success': False, 'error': 'New password is required'}), 400
+
+    success, error = pdf_service.reset_user_password(username, new_password)
+    if not success:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True})
+
+@app.route('/api/users/<username>/change-password', methods=['PUT'])
+def change_user_password(username):
+    data = request.json or {}
+    current_password = data.get('current_password') or ''
+    new_password = data.get('new_password') or ''
+
+    if not current_password or not new_password:
+        return jsonify({'success': False, 'error': 'Current and new password are required'}), 400
+
+    success, error = pdf_service.change_user_password(username, current_password, new_password)
+    if not success:
+        return jsonify({'success': False, 'error': error}), 400
+    return jsonify({'success': True})
+
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Get dashboard statistics"""
