@@ -1,6 +1,0 @@
-Django
-pypdf
-Pillow
-reportlab
-gunicorn
-whitenoise

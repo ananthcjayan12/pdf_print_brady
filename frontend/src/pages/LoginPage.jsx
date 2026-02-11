@@ -13,7 +13,12 @@ function LoginPage() {
         // If already logged in, redirect to home
         const session = sessionStorage.getItem('auth_session');
         if (session) {
-            navigate('/');
+            try {
+                const parsed = JSON.parse(session);
+                navigate(parsed?.role === 'uploader' ? '/upload' : '/');
+            } catch {
+                navigate('/');
+            }
         }
 
         // --- MIGRATION & INITIALIZATION LOGIC ---
@@ -69,7 +74,7 @@ function LoginPage() {
                         role: user.role, // Store role in session
                         loginFullTime: new Date().toISOString()
                     }));
-                    navigate('/');
+                    navigate(user.role === 'uploader' ? '/upload' : '/');
                 } else {
                     setError('Invalid username or password');
                     setIsLoading(false);

@@ -6,16 +6,44 @@ import DashboardPage from './pages/DashboardPage';
 import SettingsPage from './pages/SettingsPage';
 import LoginPage from './pages/LoginPage';
 
-// Private Route Wrapper
-const PrivateRoute = ({ children }) => {
-  const session = sessionStorage.getItem('auth_session');
-  return session ? children : <Navigate to="/login" replace />;
+const getSession = () => {
+  try {
+    const raw = sessionStorage.getItem('auth_session');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getDefaultPathForRole = (role) => {
+  if (role === 'uploader') return '/upload';
+  return '/';
+};
+
+// Private Route Wrapper (optionally role-restricted)
+const PrivateRoute = ({ children, allowedRoles }) => {
+  const session = getSession();
+  if (!session) return <Navigate to="/login" replace />;
+
+  const role = session.role || 'user';
+  if (Array.isArray(allowedRoles) && !allowedRoles.includes(role)) {
+    return <Navigate to={getDefaultPathForRole(role)} replace />;
+  }
+
+  return children;
 };
 
 // Layout wrapper for protected pages
 const Layout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const session = getSession();
+  const role = session?.role || 'user';
+  const canScanPrint = role === 'admin' || role === 'user' || role === 'printer';
+  const canUpload = role === 'admin' || role === 'user' || role === 'uploader';
+  const canDashboard = role === 'admin' || role === 'user';
+  const canSettings = role === 'admin';
 
   const handleLogout = () => {
     sessionStorage.removeItem('auth_session');
@@ -52,14 +80,18 @@ const Layout = ({ children }) => {
             Apps
           </div>
 
-          <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <Scan size={18} />
-            <span>Scan & Print</span>
-          </NavLink>
-          <NavLink to="/upload" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <Upload size={18} />
-            <span>Upload PDF</span>
-          </NavLink>
+          {canScanPrint && (
+            <NavLink to="/" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <Scan size={18} />
+              <span>Scan & Print</span>
+            </NavLink>
+          )}
+          {canUpload && (
+            <NavLink to="/upload" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <Upload size={18} />
+              <span>Upload PDF</span>
+            </NavLink>
+          )}
 
           <div style={{
             fontSize: '11px',
@@ -72,15 +104,19 @@ const Layout = ({ children }) => {
             Management
           </div>
 
-          <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <LayoutDashboard size={18} />
-            <span>Dashboard</span>
-          </NavLink>
+          {canDashboard && (
+            <NavLink to="/dashboard" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </NavLink>
+          )}
 
-          <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
-            <Settings size={18} />
-            <span>Settings</span>
-          </NavLink>
+          {canSettings && (
+            <NavLink to="/settings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+              <Settings size={18} />
+              <span>Settings</span>
+            </NavLink>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -126,25 +162,28 @@ function App() {
 
         {/* Protected Routes */}
         <Route path="/" element={
-          <PrivateRoute>
+          <PrivateRoute allowedRoles={['admin', 'user', 'printer']}>
             <Layout><ScanPage /></Layout>
           </PrivateRoute>
         } />
         <Route path="/upload" element={
-          <PrivateRoute>
+          <PrivateRoute allowedRoles={['admin', 'user', 'uploader']}>
             <Layout><UploadPage /></Layout>
           </PrivateRoute>
         } />
         <Route path="/dashboard" element={
-          <PrivateRoute>
+          <PrivateRoute allowedRoles={['admin', 'user']}>
             <Layout><DashboardPage /></Layout>
           </PrivateRoute>
         } />
         <Route path="/settings" element={
-          <PrivateRoute>
+          <PrivateRoute allowedRoles={['admin']}>
             <Layout><SettingsPage /></Layout>
           </PrivateRoute>
         } />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );

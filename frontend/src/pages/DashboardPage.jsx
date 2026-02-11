@@ -422,7 +422,9 @@ function DashboardPage() {
                                         <label className="label">Role</label>
                                         <select className="input" style={{ width: '100%' }}
                                             value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-                                            <option value="user">User (Scan & Print)</option>
+                                            <option value="user">User (Scan & Print + Upload + Dashboard)</option>
+                                            <option value="printer">Printer (Scan & Print only)</option>
+                                            <option value="uploader">Uploader (Upload PDF only)</option>
                                             <option value="admin">Admin (Full Access)</option>
                                         </select>
                                     </div>
