@@ -113,13 +113,18 @@ function ScanPage() {
             const session = JSON.parse(sessionStorage.getItem('auth_session') || '{}');
             const username = session.username || 'Anonymous';
 
-            await api.printLabel(
+            const printResponse = await api.printLabel(
                 scanResult.file_id,
                 scanResult.page_num,
                 printerName, // Use selected printer
                 labelSettings, // Pass crop settings
                 username // Pass username
             );
+
+            if (printResponse?.mode === 'preview' && printResponse?.preview_url) {
+                const baseUrl = localStorage.getItem('api_url') || 'http://localhost:5001';
+                window.open(`${baseUrl}${printResponse.preview_url}`, '_blank');
+            }
 
             // Silent success: just reset for next scan after brief display
             setTimeout(() => {

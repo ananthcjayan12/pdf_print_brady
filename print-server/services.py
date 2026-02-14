@@ -164,7 +164,7 @@ class PDFProcessingService:
         """Count how many times a barcode was printed"""
         count = 0
         # Find the mapping for this barcode to get file_id and page_num
-        mapping = self.find_barcode(barcode)
+        _matched, mapping = self.resolve_barcode(barcode)
         if not mapping:
             return 0
         
@@ -178,7 +178,7 @@ class PDFProcessingService:
 
     def get_last_print_for_barcode(self, barcode):
         """Get the last successful print job for a barcode"""
-        mapping = self.find_barcode(barcode)
+        _matched, mapping = self.resolve_barcode(barcode)
         if not mapping:
             return None
         
@@ -383,18 +383,67 @@ class PDFProcessingService:
             'mappings': doc_mappings
         }
 
+    def _normalize_barcode(self, value):
+        """Normalize barcode strings for reliable matching.
+
+        - Uppercase
+        - Strip leading/trailing whitespace
+        - Remove ASCII control characters (common in DataMatrix/GS1 scanner output)
+        """
+        if value is None:
+            return ''
+        s = str(value).strip().upper()
+        # Remove control characters (0x00-0x1F and 0x7F)
+        return ''.join(ch for ch in s if (ord(ch) >= 32 and ord(ch) != 127))
+
+    def resolve_barcode(self, barcode):
+        """Resolve a scanned barcode to a stored mapping.
+
+        IMPORTANT: Many scanners output composite strings (e.g. DataMatrix payloads)
+        that contain multiple identifiers (PN, SN, internal IDs). The previous
+        implementation returned the *first* substring match based on dict order,
+        which could map to the wrong page and print the wrong unit.
+
+        Strategy:
+        1) Exact match (after normalization)
+        2) If multiple partial matches exist, choose the most specific (longest)
+        3) Deterministic tie-breakers
+
+        Returns: (matched_barcode_key, mapping_dict) or (None, None)
+        """
+        raw = self._normalize_barcode(barcode)
+        if not raw:
+            return None, None
+
+        # Fast path: exact match by normalized key
+        for known_key in self.mappings.keys():
+            if self._normalize_barcode(known_key) == raw:
+                return known_key, self.mappings[known_key]
+
+        # Collect partial-match candidates
+        candidates = []
+        for known_key in self.mappings.keys():
+            known_norm = self._normalize_barcode(known_key)
+            if len(known_norm) < 6:
+                continue
+            if known_norm in raw or raw in known_norm:
+                candidates.append((known_key, known_norm))
+
+        if not candidates:
+            return None, None
+
+        # Prefer candidates contained within the scanned raw string (common case)
+        def sort_key(item):
+            known_key, known_norm = item
+            contained_in_scan = 1 if known_norm in raw else 0
+            return (len(known_norm), contained_in_scan)
+
+        best_key, _best_norm = max(candidates, key=sort_key)
+        return best_key, self.mappings[best_key]
+
     def find_barcode(self, barcode):
-        # Exact match
-        if barcode in self.mappings:
-            return self.mappings[barcode]
-        
-        # Check for partial matches or complex logic (like in original app)
-        # For example, if input has prefix/suffix
-        for known_barcode in self.mappings:
-            if barcode in known_barcode or known_barcode in barcode:
-                return self.mappings[known_barcode]
-        
-        return None
+        _, mapping = self.resolve_barcode(barcode)
+        return mapping
 
     def get_page_image(self, file_id, page_num, label_settings=None):
         # In a real implementation, we render PDF page to image for preview

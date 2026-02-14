@@ -4,6 +4,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 import logging
 import io
+import platform
+import datetime
+import uuid
 
 # Import services (we'll create this next)
 from services import PDFProcessingService, PrintService
@@ -151,7 +154,7 @@ def get_history():
 def scan_barcode(barcode):
     try:
         # Search for barcode
-        result = pdf_service.find_barcode(barcode)
+        matched_barcode, result = pdf_service.resolve_barcode(barcode)
         if result:
             # Check if this barcode was printed before
             print_count = pdf_service.get_barcode_print_count(barcode)
@@ -160,6 +163,7 @@ def scan_barcode(barcode):
             return jsonify({
                 'success': True,
                 'found': True,
+                'matched_barcode': matched_barcode,
                 'mapping': result,
                 'print_count': print_count,
                 'last_print': last_print
@@ -297,6 +301,35 @@ def print_label():
         return jsonify({'error': 'Missing file_id or page_num'}), 400
         
     try:
+        # macOS development mode: do not print physically, only provide preview link
+        if platform.system() == 'Darwin':
+            doc = pdf_service.documents.get(file_id)
+            if not doc:
+                return jsonify({'error': 'Document not found'}), 404
+
+            # Validate preview generation for this page/settings
+            pdf_service.get_page_image(file_id, page_num, label_settings)
+
+            # Log simulated successful print for testing flow consistency
+            pdf_service.log_print_job({
+                'id': str(uuid.uuid4()),
+                'file_id': file_id,
+                'doc_name': doc.get('name', 'Unknown Document'),
+                'page_num': page_num,
+                'printer': 'Preview (macOS)',
+                'status': 'success',
+                'timestamp': datetime.datetime.now().isoformat(),
+                'error': None,
+                'username': username
+            })
+
+            return jsonify({
+                'success': True,
+                'mode': 'preview',
+                'message': 'macOS dev mode: preview generated (no physical print).',
+                'preview_url': f'/api/preview/{file_id}/{page_num}'
+            })
+
         # Pass username to print service
         success, message = print_service.print_page(file_id, page_num, printer_name, label_settings, username)
         if success:
