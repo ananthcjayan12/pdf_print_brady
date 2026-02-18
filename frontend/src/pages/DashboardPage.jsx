@@ -9,6 +9,9 @@ function DashboardPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [stats, setStats] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [uploadDateFrom, setUploadDateFrom] = useState('');
+    const [uploadDateTo, setUploadDateTo] = useState('');
 
     // User Management State
     const [users, setUsers] = useState([]);
@@ -201,6 +204,21 @@ function DashboardPage() {
             </span>
         );
     };
+
+    const filteredDocuments = documents.filter((doc) => {
+        const nameMatches = doc.name?.toLowerCase().includes(searchTerm.trim().toLowerCase());
+
+        const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at) : null;
+        const hasValidUploadDate = uploadedDate && !Number.isNaN(uploadedDate.getTime());
+
+        const fromDate = uploadDateFrom ? new Date(`${uploadDateFrom}T00:00:00`) : null;
+        const toDate = uploadDateTo ? new Date(`${uploadDateTo}T23:59:59`) : null;
+
+        const fromMatches = !fromDate || (hasValidUploadDate && uploadedDate >= fromDate);
+        const toMatches = !toDate || (hasValidUploadDate && uploadedDate <= toDate);
+
+        return nameMatches && fromMatches && toMatches;
+    });
 
     return (
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -509,6 +527,34 @@ function DashboardPage() {
                                     </div>
                                 )}
 
+                                {activeTab === 'documents' && (
+                                    <div style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '10px' }}>
+                                            <input
+                                                type="text"
+                                                className="input"
+                                                placeholder="Search uploads by file name"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                            />
+                                            <input
+                                                type="date"
+                                                className="input"
+                                                value={uploadDateFrom}
+                                                onChange={(e) => setUploadDateFrom(e.target.value)}
+                                                title="Uploaded from"
+                                            />
+                                            <input
+                                                type="date"
+                                                className="input"
+                                                value={uploadDateTo}
+                                                onChange={(e) => setUploadDateTo(e.target.value)}
+                                                title="Uploaded to"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div style={{ overflowX: 'auto' }}>
                                     <table style={{ margin: 0 }}>
                                         <thead style={{ background: '#fcfcfd', borderBottom: '1px solid var(--divide)' }}>
@@ -533,7 +579,7 @@ function DashboardPage() {
                                         </thead>
                                         <tbody>
                                             {activeTab === 'documents' ? (
-                                                documents.map(doc => (
+                                                filteredDocuments.map(doc => (
                                                     <tr
                                                         key={doc.id}
                                                         onClick={() => handleRowClick(doc.id)}
@@ -631,7 +677,7 @@ function DashboardPage() {
                                                     </tr>
                                                 ))
                                             )}
-                                            {((activeTab === 'documents' && documents.length === 0) || (activeTab === 'history' && history.length === 0)) && (
+                                            {((activeTab === 'documents' && filteredDocuments.length === 0) || (activeTab === 'history' && history.length === 0)) && (
                                                 <tr>
                                                     <td colSpan="6" className="text-center" style={{ padding: '60px' }}>
                                                         <div style={{ color: 'var(--text-secondary)' }}>No items found.</div>
