@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 
 function UploadPage() {
+    const navigate = useNavigate();
     const [files, setFiles] = useState([]);
     const [status, setStatus] = useState('idle'); // idle, uploading, success, error
     const [message, setMessage] = useState('');
@@ -102,6 +104,7 @@ function UploadPage() {
                     pages: totalPages,
                     barcodes: totalBarcodes
                 });
+                navigate('/dashboard', { replace: true });
             } else {
                 setStatus('error');
                 setMessage('All selected files failed to upload.');
