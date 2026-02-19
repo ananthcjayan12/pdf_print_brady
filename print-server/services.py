@@ -308,8 +308,22 @@ class PDFProcessingService:
         
         for i, page in enumerate(reader.pages):
             page_num = i + 1
+            extracted_texts = []
+
             text = page.extract_text()
-            serials = text_service.extract_serial_numbers(text)
+            if text:
+                extracted_texts.append(text)
+
+            # Fallback for PDFs where the default extractor drops/reshapes text
+            # differently on some platforms/fonts.
+            try:
+                layout_text = page.extract_text(extraction_mode='layout')
+                if layout_text and layout_text not in extracted_texts:
+                    extracted_texts.append(layout_text)
+            except Exception:
+                pass
+
+            serials = text_service.extract_serial_numbers('\n'.join(extracted_texts))
             
             for serial in serials:
                 barcode = serial['text']
@@ -514,10 +528,26 @@ class PDFProcessingService:
             return output_buffer.getvalue()
 
 class TextExtractionService:
+    def _clean_text(self, value):
+        # Normalize control chars that frequently appear in extracted PDF text
+        # (platform/parser dependent), while preserving newlines for regex context.
+        if not value:
+            return ''
+        return ''.join(ch if (ch == '\n' or ord(ch) >= 32) else ' ' for ch in str(value))
+
     def extract_serial_numbers(self, text):
-        if not text: return []
+        if not text:
+            return []
         
         serial_numbers = []
+        seen_values = set()
+
+        base_text = self._clean_text(text)
+        condensed_text = re.sub(r'(?<=\w)\s+(?=\w)', '', base_text)
+        candidate_texts = [base_text]
+        if condensed_text != base_text:
+            candidate_texts.append(condensed_text)
+
         # PORTED REGEX PATTERNS
         patterns = [
             (r'\[\)>.*?S([A-Z][0-9]{10})[0-9]*[A-Z]', 'BARCODE_K'),
@@ -527,15 +557,21 @@ class TextExtractionService:
             (r'\b([A-Z]{1,2}[0-9]{8,12})\b', 'ALPHANUMERIC_ID')
         ]
         
-        for pattern, label_type in patterns:
-            matches = re.finditer(pattern, text, re.IGNORECASE)
-            for match in matches:
-                # Logic to use group 1
-                try:
-                    val = match.group(1)
-                    if len(val) >= 6:
+        for candidate in candidate_texts:
+            for pattern, label_type in patterns:
+                matches = re.finditer(pattern, candidate, re.IGNORECASE)
+                for match in matches:
+                    try:
+                        val = re.sub(r'\s+', '', match.group(1).upper())
+                        if len(val) < 6:
+                            continue
+                        dedupe_key = (val, label_type)
+                        if dedupe_key in seen_values:
+                            continue
+                        seen_values.add(dedupe_key)
                         serial_numbers.append({'text': val, 'type': label_type, 'confidence': 1.0})
-                except: pass
+                    except Exception:
+                        pass
                 
         return serial_numbers
 
