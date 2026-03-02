@@ -363,7 +363,7 @@ function SettingsPage() {
                                     type="range"
                                     min="50"
                                     max="200"
-                                    step="5"
+                                    step="1"
                                     value={labelSettings.scale}
                                     onChange={(e) => updateLabelSetting('scale', e.target.value)}
                                     style={{ flex: 1 }}
