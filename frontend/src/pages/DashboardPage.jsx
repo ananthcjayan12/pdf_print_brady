@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
-import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, AlertCircle, User, Key, Download, UserPlus, Shield, Lock } from 'lucide-react';
+import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, AlertCircle, User, Download, UserPlus, Shield } from 'lucide-react';
 import { api } from '../api';
 
+const getTodayDateInput = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = `${now.getMonth() + 1}`.padStart(2, '0');
+    const day = `${now.getDate()}`.padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 function DashboardPage() {
+    const todayDate = getTodayDateInput();
     const [activeTab, setActiveTab] = useState('documents'); // 'documents', 'history', or 'users'
     const [documents, setDocuments] = useState([]);
     const [history, setHistory] = useState([]);
@@ -10,8 +19,11 @@ function DashboardPage() {
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [stats, setStats] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [uploadDateFrom, setUploadDateFrom] = useState('');
-    const [uploadDateTo, setUploadDateTo] = useState('');
+    const [uploadDateFrom] = useState(todayDate);
+    const [uploadDateTo] = useState(todayDate);
+    const [reportDateFrom, setReportDateFrom] = useState(todayDate);
+    const [reportDateTo, setReportDateTo] = useState(todayDate);
+    const [reportStatus, setReportStatus] = useState('all');
 
     // User Management State
     const [users, setUsers] = useState([]);
@@ -29,9 +41,15 @@ function DashboardPage() {
         loadData();
     }, [activeTab]);
 
+    useEffect(() => {
+        if (activeTab === 'history') {
+            loadData();
+        }
+    }, [reportDateFrom, reportDateTo, reportStatus]);
+
     const loadStats = async () => {
         try {
-            const data = await api.getStats();
+            const data = await api.getStats({ date: 'today' });
             if (data.success) setStats(data.stats);
         } catch (error) {
             console.error('Failed to load stats', error);
@@ -49,10 +67,14 @@ function DashboardPage() {
         setIsLoading(true);
         try {
             if (activeTab === 'documents') {
-                const data = await api.getDocuments();
+                const data = await api.getDocuments({ from: uploadDateFrom, to: uploadDateTo });
                 if (data.success) setDocuments(data.documents);
             } else if (activeTab === 'history') {
-                const data = await api.getPrintHistory();
+                const data = await api.getPrintHistory({
+                    from: reportDateFrom,
+                    to: reportDateTo,
+                    status: reportStatus
+                });
                 if (data.success) setHistory(data.history);
             } else if (activeTab === 'users') {
                 await loadUsers();
@@ -220,6 +242,64 @@ function DashboardPage() {
         return nameMatches && fromMatches && toMatches;
     });
 
+    const handlePrintReport = () => {
+        const printWindow = window.open('', '_blank', 'width=1100,height=700');
+        if (!printWindow) return;
+
+        const rows = history.map((job) => {
+            const time = job.timestamp ? new Date(job.timestamp).toLocaleString() : '';
+            return `
+                <tr>
+                    <td>${time}</td>
+                    <td>${job.doc_name || 'Unknown'}</td>
+                    <td>${job.page_num || ''}</td>
+                    <td>${job.username || 'Unknown'}</td>
+                    <td>${job.printer || 'Default'}</td>
+                    <td>${job.status || ''}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const statusLabel = reportStatus === 'all' ? 'All' : reportStatus;
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Print Report</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+                        h1 { margin: 0 0 8px; font-size: 22px; }
+                        p { margin: 0 0 20px; color: #475569; }
+                        table { width: 100%; border-collapse: collapse; }
+                        th, td { border: 1px solid #e2e8f0; padding: 8px 10px; text-align: left; font-size: 12px; }
+                        th { background: #f8fafc; text-transform: uppercase; font-size: 11px; letter-spacing: 0.04em; }
+                    </style>
+                </head>
+                <body>
+                    <h1>Print Report</h1>
+                    <p>From ${reportDateFrom} to ${reportDateTo} | Status: ${statusLabel}</p>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Document</th>
+                                <th>Page</th>
+                                <th>User</th>
+                                <th>Printer</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows || '<tr><td colspan="6">No records found.</td></tr>'}
+                        </tbody>
+                    </table>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    };
+
     return (
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             {/* Stats Cards Section */}
@@ -241,7 +321,7 @@ function DashboardPage() {
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.total_documents ?? '-'}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        {stats?.total_pages ?? 0} pages total
+                        Today's uploaded files
                     </div>
                 </div>
 
@@ -253,11 +333,11 @@ function DashboardPage() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <CheckCircle size={22} strokeWidth={1.5} />
-                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Prints Done</span>
+                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Printed</span>
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.total_prints ?? '-'}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        {stats?.total_barcodes ?? 0} barcodes found
+                        Labels printed today
                     </div>
                 </div>
 
@@ -269,11 +349,11 @@ function DashboardPage() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <Clock size={22} strokeWidth={1.5} />
-                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending</span>
+                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Left</span>
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.pending_prints ?? '-'}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        awaiting print
+                        Labels remaining
                     </div>
                 </div>
 
@@ -300,7 +380,7 @@ function DashboardPage() {
             <div className="flex justify-between items-center" style={{ marginBottom: '32px' }}>
                 <div>
                     <h1>Dashboard</h1>
-                    <p>Manage your documents, view print history, and configure users.</p>
+                    <p>Main view shows today's uploads and today's print activity.</p>
                 </div>
 
                 {/* Tab Navigation */}
@@ -514,22 +594,59 @@ function DashboardPage() {
                         ) : (
                             <>
                                 {activeTab === 'history' && (
-                                    <div className="flex items-center justify-between" style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
-                                        <h3 style={{ margin: 0 }}>Print Job History</h3>
-                                        <button
-                                            onClick={() => api.downloadReport()}
-                                            className="btn btn-secondary"
-                                            title="Download as CSV"
-                                        >
-                                            <Download size={16} style={{ marginRight: '8px' }} />
-                                            Download Report
-                                        </button>
+                                    <div style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
+                                        <div className="flex items-center justify-between" style={{ marginBottom: '12px' }}>
+                                            <h3 style={{ margin: 0 }}>Print Job Report</h3>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Select date range and status, then print/download report</div>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto auto', gap: '10px' }}>
+                                            <input
+                                                type="date"
+                                                className="input"
+                                                value={reportDateFrom}
+                                                onChange={(e) => setReportDateFrom(e.target.value)}
+                                                title="From date"
+                                            />
+                                            <input
+                                                type="date"
+                                                className="input"
+                                                value={reportDateTo}
+                                                onChange={(e) => setReportDateTo(e.target.value)}
+                                                title="To date"
+                                            />
+                                            <select
+                                                className="input"
+                                                value={reportStatus}
+                                                onChange={(e) => setReportStatus(e.target.value)}
+                                                title="Status"
+                                            >
+                                                <option value="all">All Statuses</option>
+                                                <option value="success">Success</option>
+                                                <option value="failed">Failed</option>
+                                            </select>
+                                            <button
+                                                onClick={() => api.downloadReport({ from: reportDateFrom, to: reportDateTo, status: reportStatus })}
+                                                className="btn btn-secondary"
+                                                title="Download as CSV"
+                                            >
+                                                <Download size={16} style={{ marginRight: '8px' }} />
+                                                Download CSV
+                                            </button>
+                                            <button
+                                                onClick={handlePrintReport}
+                                                className="btn btn-primary"
+                                                title="Print report"
+                                            >
+                                                <Printer size={16} style={{ marginRight: '8px' }} />
+                                                Print Report
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 
                                 {activeTab === 'documents' && (
                                     <div style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '10px' }}>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px' }}>
                                             <input
                                                 type="text"
                                                 className="input"
@@ -537,20 +654,9 @@ function DashboardPage() {
                                                 value={searchTerm}
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
-                                            <input
-                                                type="date"
-                                                className="input"
-                                                value={uploadDateFrom}
-                                                onChange={(e) => setUploadDateFrom(e.target.value)}
-                                                title="Uploaded from"
-                                            />
-                                            <input
-                                                type="date"
-                                                className="input"
-                                                value={uploadDateTo}
-                                                onChange={(e) => setUploadDateTo(e.target.value)}
-                                                title="Uploaded to"
-                                            />
+                                            <div className="status-badge" style={{ alignSelf: 'center', justifySelf: 'end', background: '#f1f5f9', color: '#334155' }}>
+                                                Showing: Today's uploads
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -563,7 +669,8 @@ function DashboardPage() {
                                                     <th style={{ paddingLeft: '24px' }}>Name</th>
                                                     <th>Date Uploaded</th>
                                                     <th className="text-center">Pages</th>
-                                                    <th>Status</th>
+                                                    <th className="text-center">Printed</th>
+                                                    <th className="text-center">Left</th>
                                                     <th style={{ paddingRight: '24px', textAlign: 'right' }}>Actions</th>
                                                 </tr>
                                             ) : (
@@ -606,11 +713,8 @@ function DashboardPage() {
                                                             {new Date(doc.uploaded_at).toLocaleDateString()}
                                                         </td>
                                                         <td className="text-center" style={{ fontFamily: 'monospaced' }}>{doc.pages}</td>
-                                                        <td>
-                                                            <span className="status-badge" style={{ background: '#e3f2fd', color: '#0d47a1' }}>
-                                                                {doc.barcodes_found} Barcodes
-                                                            </span>
-                                                        </td>
+                                                        <td className="text-center" style={{ color: '#16a34a', fontWeight: 600 }}>{doc.printed_pages ?? 0}</td>
+                                                        <td className="text-center" style={{ color: '#d97706', fontWeight: 600 }}>{doc.left_pages ?? doc.pages ?? 0}</td>
                                                         <td style={{ textAlign: 'right', paddingRight: '24px' }}>
                                                             <button
                                                                 className="btn"

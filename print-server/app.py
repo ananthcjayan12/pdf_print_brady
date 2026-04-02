@@ -128,7 +128,9 @@ def upload_file():
 
 @app.route('/api/documents', methods=['GET'])
 def get_documents():
-    docs = pdf_service.get_all_documents()
+    from_date = request.args.get('from')
+    to_date = request.args.get('to')
+    docs = pdf_service.get_all_documents(from_date=from_date, to_date=to_date)
     return jsonify({'success': True, 'documents': docs})
 
 @app.route('/api/documents/<file_id>', methods=['GET', 'DELETE'])
@@ -147,7 +149,10 @@ def document_operations(file_id):
 
 @app.route('/api/history', methods=['GET'])
 def get_history():
-    history = pdf_service.get_print_history()
+    from_date = request.args.get('from')
+    to_date = request.args.get('to')
+    status = request.args.get('status')
+    history = pdf_service.get_print_history(from_date=from_date, to_date=to_date, status=status)
     return jsonify({'success': True, 'history': history})
 
 @app.route('/api/scan/<barcode>', methods=['GET'])
@@ -249,7 +254,16 @@ def change_user_password(username):
 def get_stats():
     """Get dashboard statistics"""
     try:
-        stats = pdf_service.get_dashboard_stats()
+        date_scope = request.args.get('date')
+        from_date = request.args.get('from')
+        to_date = request.args.get('to')
+
+        if date_scope == 'today':
+            today = datetime.date.today().isoformat()
+            from_date = today
+            to_date = today
+
+        stats = pdf_service.get_dashboard_stats(from_date=from_date, to_date=to_date)
         return jsonify({'success': True, 'stats': stats})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -344,6 +358,9 @@ def download_report():
     """Generate and download CSV report of print history"""
     try:
         import csv
+        from_date = request.args.get('from')
+        to_date = request.args.get('to')
+        status = request.args.get('status')
         
         # Create CSV in memory
         output = io.StringIO()
@@ -353,7 +370,7 @@ def download_report():
         writer.writerow(['Date', 'Time', 'Document', 'Barcode', 'Page', 'User', 'Printer', 'Status', 'Message'])
         
         # Data
-        history = pdf_service.get_print_history()
+        history = pdf_service.get_print_history(from_date=from_date, to_date=to_date, status=status)
         for job in history:
             timestamp = job.get('timestamp', '')
             date_str = ''
@@ -366,13 +383,13 @@ def download_report():
             writer.writerow([
                 date_str,
                 time_str,
-                job.get('filename', 'Unknown'),
+                job.get('doc_name', 'Unknown'),
                 job.get('barcode', 'N/A'),
                 job.get('page_num', ''),
                 job.get('username', 'Unknown'), # Include username
                 job.get('printer', 'Default'),
                 job.get('status', ''),
-                job.get('message', '')
+                job.get('error', '')
             ])
             
         output.seek(0)

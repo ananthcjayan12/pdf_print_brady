@@ -57,13 +57,24 @@ export const api = {
     },
 
     // Download Report
-    downloadReport: () => {
-        window.open(`${getBaseUrl()}/api/reports/download`, '_blank');
+    downloadReport: (params = {}) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.status && params.status !== 'all') query.set('status', params.status);
+        const queryString = query.toString();
+        const url = `${getBaseUrl()}/api/reports/download${queryString ? `?${queryString}` : ''}`;
+        window.open(url, '_blank');
     },
 
     // Dashboard APIs
-    getDocuments: async () => {
-        const res = await axios.get(`${getBaseUrl()}/api/documents`);
+    getDocuments: async (params = {}) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        const queryString = query.toString();
+        const url = `${getBaseUrl()}/api/documents${queryString ? `?${queryString}` : ''}`;
+        const res = await axios.get(url);
         return res.data;
     },
 
@@ -77,14 +88,26 @@ export const api = {
         return res.data;
     },
 
-    getPrintHistory: async () => {
-        const res = await axios.get(`${getBaseUrl()}/api/history`);
+    getPrintHistory: async (params = {}) => {
+        const query = new URLSearchParams();
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        if (params.status && params.status !== 'all') query.set('status', params.status);
+        const queryString = query.toString();
+        const url = `${getBaseUrl()}/api/history${queryString ? `?${queryString}` : ''}`;
+        const res = await axios.get(url);
         return res.data;
     },
 
     // Get Dashboard Stats
-    getStats: async () => {
-        const res = await axios.get(`${getBaseUrl()}/api/stats`);
+    getStats: async (params = {}) => {
+        const query = new URLSearchParams();
+        if (params.date) query.set('date', params.date);
+        if (params.from) query.set('from', params.from);
+        if (params.to) query.set('to', params.to);
+        const queryString = query.toString();
+        const url = `${getBaseUrl()}/api/stats${queryString ? `?${queryString}` : ''}`;
+        const res = await axios.get(url);
         return res.data;
     },
 
@@ -140,4 +163,3 @@ export const api = {
         return `${getBaseUrl()}/api/preview/${fileId}/${pageNum}`;
     }
 };
-

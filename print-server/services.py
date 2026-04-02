@@ -156,9 +156,49 @@ class PDFProcessingService:
         self.print_jobs.append(job_data)
         self.save_db()
 
-    def get_print_history(self):
-        # Return sorted by timestamp desc
-        return sorted(self.print_jobs, key=lambda x: x['timestamp'], reverse=True)
+    def _parse_date(self, value):
+        if not value:
+            return None
+        if isinstance(value, datetime.datetime):
+            return value.date()
+        if isinstance(value, datetime.date):
+            return value
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            # Handles YYYY-MM-DD and full ISO datetime
+            return datetime.datetime.fromisoformat(text).date()
+        except ValueError:
+            try:
+                return datetime.datetime.strptime(text, '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+    def _matches_date_range(self, timestamp, from_date=None, to_date=None):
+        ts_date = self._parse_date(timestamp)
+        if ts_date is None:
+            return False
+        if from_date and ts_date < from_date:
+            return False
+        if to_date and ts_date > to_date:
+            return False
+        return True
+
+    def get_print_history(self, from_date=None, to_date=None, status=None):
+        """Return print history sorted by timestamp desc, optionally filtered."""
+        parsed_from = self._parse_date(from_date)
+        parsed_to = self._parse_date(to_date)
+
+        filtered = []
+        for job in self.print_jobs:
+            if status and status != 'all' and job.get('status') != status:
+                continue
+            if (parsed_from or parsed_to) and not self._matches_date_range(job.get('timestamp'), parsed_from, parsed_to):
+                continue
+            filtered.append(job)
+
+        return sorted(filtered, key=lambda x: x['timestamp'], reverse=True)
 
     def get_barcode_print_count(self, barcode):
         """Count how many times a barcode was printed"""
@@ -195,31 +235,29 @@ class PDFProcessingService:
                 }
         return None
 
-    def get_dashboard_stats(self):
-        """Get overall dashboard statistics"""
-        total_documents = len(self.documents)
-        total_barcodes = len(self.mappings)
-        total_pages = sum(doc.get('pages', 0) for doc in self.documents.values())
-        
-        # Print statistics
-        total_prints = len([j for j in self.print_jobs if j['status'] == 'success'])
-        failed_prints = len([j for j in self.print_jobs if j['status'] == 'failed'])
-        
-        # Pending prints (barcodes that have never been printed)
+    def get_dashboard_stats(self, from_date=None, to_date=None):
+        """Get dashboard statistics, optionally filtered by date range."""
+        docs = self.get_all_documents(from_date=from_date, to_date=to_date)
+        doc_ids = {doc['id'] for doc in docs}
+
+        total_documents = len(docs)
+        total_pages = sum(doc.get('pages', 0) for doc in docs)
+
+        # For cards we track labels/pages printed in filtered period.
+        jobs = self.get_print_history(from_date=from_date, to_date=to_date)
+        total_prints = len([j for j in jobs if j.get('status') == 'success' and j.get('file_id') in doc_ids])
+        failed_prints = len([j for j in jobs if j.get('status') == 'failed' and j.get('file_id') in doc_ids])
+
+        # "left" = uploaded labels/pages in range - unique printed pages for those docs
         printed_pages = set()
         for job in self.print_jobs:
-            if job['status'] == 'success':
-                printed_pages.add((job['file_id'], job['page_num']))
-        
-        pending_prints = 0
-        for barcode, mapping in self.mappings.items():
-            key = (mapping['file_id'], mapping['page_num'])
-            if key not in printed_pages:
-                pending_prints += 1
-        
+            if job.get('status') == 'success' and job.get('file_id') in doc_ids:
+                printed_pages.add((job.get('file_id'), job.get('page_num')))
+
+        pending_prints = max(total_pages - len(printed_pages), 0)
+
         return {
             'total_documents': total_documents,
-            'total_barcodes': total_barcodes,
             'total_pages': total_pages,
             'total_prints': total_prints,
             'failed_prints': failed_prints,
@@ -372,9 +410,26 @@ class PDFProcessingService:
             return True
         return False
 
-    def get_all_documents(self):
+    def get_all_documents(self, from_date=None, to_date=None):
         # Convert dict to sorted list
-        docs_list = list(self.documents.values())
+        parsed_from = self._parse_date(from_date)
+        parsed_to = self._parse_date(to_date)
+
+        docs_list = []
+        for doc in self.documents.values():
+            if (parsed_from or parsed_to) and not self._matches_date_range(doc.get('uploaded_at'), parsed_from, parsed_to):
+                continue
+
+            printed_pages = set()
+            for job in self.print_jobs:
+                if job.get('file_id') == doc.get('id') and job.get('status') == 'success':
+                    printed_pages.add(job.get('page_num'))
+
+            doc_with_counts = dict(doc)
+            doc_with_counts['printed_pages'] = len(printed_pages)
+            doc_with_counts['left_pages'] = max(doc.get('pages', 0) - len(printed_pages), 0)
+            docs_list.append(doc_with_counts)
+
         return sorted(docs_list, key=lambda x: x['uploaded_at'], reverse=True)
 
     def get_document_details(self, file_id):
