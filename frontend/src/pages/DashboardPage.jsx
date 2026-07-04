@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, AlertCircle, User, Download, UserPlus, Shield } from 'lucide-react';
 import { api } from '../api';
+import { getTodayUploadActivityIds, mergeDocumentsWithTodayActivity, sortByTodayActivityThenUploadTime } from '../uploadActivity';
 
 const getTodayDateInput = () => {
     const now = new Date();
@@ -18,6 +19,7 @@ function DashboardPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [selectedDoc, setSelectedDoc] = useState(null);
     const [stats, setStats] = useState(null);
+    const [cumulativeStats, setCumulativeStats] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [uploadDateFrom] = useState(todayDate);
     const [uploadDateTo] = useState(todayDate);
@@ -49,8 +51,12 @@ function DashboardPage() {
 
     const loadStats = async () => {
         try {
-            const data = await api.getStats({ date: 'today' });
-            if (data.success) setStats(data.stats);
+            const [todayData, cumulativeData] = await Promise.all([
+                api.getStats({ date: 'today' }),
+                api.getStats()
+            ]);
+            if (todayData.success) setStats(todayData.stats);
+            if (cumulativeData.success) setCumulativeStats(cumulativeData.stats);
         } catch (error) {
             console.error('Failed to load stats', error);
         }
@@ -67,8 +73,29 @@ function DashboardPage() {
         setIsLoading(true);
         try {
             if (activeTab === 'documents') {
-                const data = await api.getDocuments({ from: uploadDateFrom, to: uploadDateTo });
-                if (data.success) setDocuments(data.documents);
+                const todayActivityIds = getTodayUploadActivityIds();
+                const [todayData, allData] = await Promise.all([
+                    api.getDocuments({ from: uploadDateFrom, to: uploadDateTo }),
+                    todayActivityIds.length > 0 ? api.getDocuments() : Promise.resolve({ success: true, documents: [] })
+                ]);
+
+                if (todayData.success) {
+                    const todayDocs = todayData.documents || [];
+                    const allDocs = allData.success ? (allData.documents || []) : [];
+                    const mergedMap = new Map(todayDocs.map((document) => [document.id, document]));
+
+                    for (const document of allDocs) {
+                        if (todayActivityIds.includes(document.id)) {
+                            mergedMap.set(document.id, document);
+                        }
+                    }
+
+                    const mergedDocuments = sortByTodayActivityThenUploadTime(
+                        mergeDocumentsWithTodayActivity(Array.from(mergedMap.values()))
+                    );
+
+                    setDocuments(mergedDocuments);
+                }
             } else if (activeTab === 'history') {
                 const data = await api.getPrintHistory({
                     from: reportDateFrom,
@@ -317,11 +344,15 @@ function DashboardPage() {
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <Files size={22} strokeWidth={1.5} />
-                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total PDFs</span>
+                        <span style={{ fontSize: '11px', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PDFs</span>
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.total_documents ?? '-'}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        Today's uploaded files
+                        Today's uploaded PDFs
+                    </div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
+                        Cumulative PDFs: <strong>{cumulativeStats?.total_documents ?? '-'}</strong>
+                        {' '}| Pages: <strong>{cumulativeStats?.total_pages ?? '-'}</strong>
                     </div>
                 </div>
 
@@ -339,6 +370,9 @@ function DashboardPage() {
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
                         Labels printed today
                     </div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
+                        Cumulative printed: <strong>{cumulativeStats?.total_prints ?? '-'}</strong>
+                    </div>
                 </div>
 
                 <div className="card" style={{
@@ -353,7 +387,10 @@ function DashboardPage() {
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.pending_prints ?? '-'}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        Labels remaining
+                        Labels remaining today
+                    </div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
+                        Cumulative left: <strong>{cumulativeStats?.pending_prints ?? '-'}</strong>
                     </div>
                 </div>
 
@@ -371,7 +408,10 @@ function DashboardPage() {
                     </div>
                     <div style={{ fontSize: '28px', fontWeight: 700 }}>{stats?.failed_prints ?? 0}</div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '4px' }}>
-                        print failures
+                        Print failures today
+                    </div>
+                    <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
+                        Cumulative failed: <strong>{cumulativeStats?.failed_prints ?? '-'}</strong>
                     </div>
                 </div>
             </div>
@@ -380,7 +420,7 @@ function DashboardPage() {
             <div className="flex justify-between items-center" style={{ marginBottom: '32px' }}>
                 <div>
                     <h1>Dashboard</h1>
-                    <p>Main view shows today's uploads and today's print activity.</p>
+                    <p>Main view shows today&apos;s upload activity and today&apos;s print activity.</p>
                 </div>
 
                 {/* Tab Navigation */}
@@ -655,7 +695,7 @@ function DashboardPage() {
                                                 onChange={(e) => setSearchTerm(e.target.value)}
                                             />
                                             <div className="status-badge" style={{ alignSelf: 'center', justifySelf: 'end', background: '#f1f5f9', color: '#334155' }}>
-                                                Showing: Today's uploads
+                                                Showing: Today&apos;s upload activity
                                             </div>
                                         </div>
                                     </div>

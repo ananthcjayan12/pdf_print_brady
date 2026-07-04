@@ -1,6 +1,38 @@
 import { useState, useEffect } from 'react';
-import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye, Printer, Zap, Sliders } from 'lucide-react';
+import { Server, RefreshCw, CheckCircle, XCircle, Crop, Clock, Eye, Printer, Zap } from 'lucide-react';
 import { api } from '../api';
+
+const DEFAULT_LABEL_SETTINGS = {
+    width: 3.94,      // inches (100mm)
+    height: 1.5,      // inches (38mm)
+    offsetX: 0,       // inches from left
+    offsetY: 0,       // inches from top
+    scale: 100,       // percentage (50-200)
+    dpi: 600,         // Higher default for better quality
+    // Print Quality Settings
+    color_mode: 'grayscale',  // rgb, grayscale, monochrome
+    sharpening: true,         // Apply sharpening filter
+    resampling: 'lanczos',    // lanczos (best), bicubic, bilinear, nearest
+    contrast: 1.0,            // 0.5 to 2.0
+    threshold: 128            // For monochrome mode (0-255)
+};
+
+const normalizeLabelSettings = (settings = {}) => {
+    const merged = {
+        ...DEFAULT_LABEL_SETTINGS,
+        ...(settings && typeof settings === 'object' ? settings : {})
+    };
+
+    const numericKeys = ['width', 'height', 'offsetX', 'offsetY', 'scale', 'dpi', 'contrast', 'threshold'];
+    for (const key of numericKeys) {
+        const value = Number(merged[key]);
+        merged[key] = Number.isFinite(value) ? value : DEFAULT_LABEL_SETTINGS[key];
+    }
+
+    merged.sharpening = Boolean(merged.sharpening);
+
+    return merged;
+};
 
 function SettingsPage() {
     // Server settings
@@ -14,20 +46,7 @@ function SettingsPage() {
     const [loadingPrinters, setLoadingPrinters] = useState(false);
 
     // Label settings - default 100x38mm = ~3.94x1.5 inches
-    const [labelSettings, setLabelSettings] = useState({
-        width: 3.94,      // inches (100mm)
-        height: 1.5,      // inches (38mm)
-        offsetX: 0,       // inches from left
-        offsetY: 0,       // inches from top
-        scale: 100,       // percentage (50-200)
-        dpi: 600,         // Higher default for better quality
-        // Print Quality Settings
-        color_mode: 'grayscale',  // rgb, grayscale, monochrome
-        sharpening: true,         // Apply sharpening filter
-        resampling: 'lanczos',    // lanczos (best), bicubic, bilinear, nearest
-        contrast: 1.0,            // 0.5 to 2.0
-        threshold: 128            // For monochrome mode (0-255)
-    });
+    const [labelSettings, setLabelSettings] = useState(DEFAULT_LABEL_SETTINGS);
 
     // Auto-print settings
     const [autoPrintDelay, setAutoPrintDelay] = useState(3);
@@ -47,8 +66,10 @@ function SettingsPage() {
         const storedLabel = localStorage.getItem('label_settings');
         if (storedLabel) {
             try {
-                setLabelSettings(JSON.parse(storedLabel));
-            } catch (e) { }
+                setLabelSettings(normalizeLabelSettings(JSON.parse(storedLabel)));
+            } catch (e) {
+                setLabelSettings(DEFAULT_LABEL_SETTINGS);
+            }
         }
 
         // Load auto-print delay
@@ -151,7 +172,7 @@ function SettingsPage() {
             processedValue = parseFloat(value) || 0;
         }
 
-        setLabelSettings(prev => ({ ...prev, [key]: processedValue }));
+        setLabelSettings(prev => normalizeLabelSettings({ ...prev, [key]: processedValue }));
     };
 
     // Generate preview URL with label settings as query params

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Files, RefreshCw, Barcode, Clock } from 'lucide-react';
 import { api } from '../api';
+import { getTodayUploadActivityIds, mergeDocumentsWithTodayActivity, recordUploadActivity, sortByTodayActivityThenUploadTime } from '../uploadActivity';
 
 function UploadPage() {
     const [files, setFiles] = useState([]);
@@ -13,6 +14,7 @@ function UploadPage() {
     const [documentsMessage, setDocumentsMessage] = useState('');
     const [deletingId, setDeletingId] = useState('');
     const fileInputRef = useRef(null);
+    const todayActivityIds = getTodayUploadActivityIds();
 
     useEffect(() => {
         loadDocuments();
@@ -102,6 +104,12 @@ function UploadPage() {
                     const result = await api.uploadFile(file);
 
                     if (result.success) {
+                        recordUploadActivity({
+                            fileId: result.file_id,
+                            name: file.name,
+                            duplicate: result.is_duplicate
+                        });
+
                         uploadedCount += 1;
                         if (result.is_duplicate) {
                             duplicateCount += 1;
@@ -193,6 +201,9 @@ function UploadPage() {
 
         return parsed.toLocaleString();
     };
+
+    const documentsWithActivity = sortByTodayActivityThenUploadTime(mergeDocumentsWithTodayActivity(documents));
+    const todayDocuments = documentsWithActivity.filter((document) => todayActivityIds.includes(document.id));
 
     return (
         <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
@@ -373,7 +384,7 @@ function UploadPage() {
                                 <Files size={18} color="var(--primary)" />
                                 <h2 style={{ marginBottom: 0 }}>Uploaded PDFs</h2>
                             </div>
-                            <p style={{ fontSize: '14px' }}>Old uploads are visible here by default. Delete a PDF first if you want to remove it from the library.</p>
+                            <p style={{ fontSize: '14px' }}>Old uploads are visible here by default. Today&apos;s upload activity also includes duplicate re-uploads so operators can keep working from the same file.</p>
                         </div>
 
                         <button
@@ -394,6 +405,30 @@ function UploadPage() {
                         </div>
                     )}
 
+                    {todayDocuments.length > 0 && (
+                        <div style={{ marginBottom: '18px', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', background: 'rgba(99,91,255,0.03)' }}>
+                            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                Today&apos;s Upload Activity
+                            </div>
+                            <div style={{ display: 'grid', gap: '10px' }}>
+                                {todayDocuments.map((document) => (
+                                    <div key={`today-${document.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', background: 'white', border: '1px solid var(--border)' }}>
+                                        <div style={{ minWidth: 0 }}>
+                                            <div style={{ fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-word' }}>{document.name}</div>
+                                            <div className="text-muted" style={{ fontSize: '12px', marginTop: '4px' }}>
+                                                {document.wasDuplicateUploadToday ? 'Re-used today from existing uploads' : 'Uploaded today'}
+                                            </div>
+                                        </div>
+                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{document.pages || 0} pages</div>
+                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{document.barcodes_found || 0} barcodes</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {documentsStatus === 'loading' ? (
                         <div style={{ padding: '28px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading uploaded PDFs...</div>
                     ) : documents.length === 0 ? (
@@ -403,7 +438,7 @@ function UploadPage() {
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gap: '12px', maxHeight: '780px', overflowY: 'auto', paddingRight: '4px' }}>
-                            {documents.map((document) => (
+                            {documentsWithActivity.map((document) => (
                                 <div
                                     key={document.id}
                                     style={{
@@ -420,6 +455,11 @@ function UploadPage() {
                                                 <FileText size={16} color="var(--primary)" />
                                                 <div style={{ fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-word' }}>{document.name}</div>
                                             </div>
+                                            {document.wasDuplicateUploadToday && (
+                                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99,91,255,0.12)', color: 'var(--primary)', borderRadius: '999px', padding: '4px 8px', fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
+                                                    Re-used today
+                                                </div>
+                                            )}
                                             <div className="text-muted" style={{ fontSize: '12px' }}>Uploaded {formatDateTime(document.uploaded_at)}</div>
                                         </div>
 

@@ -174,7 +174,7 @@ function ScanPage() {
         <div style={{ maxWidth: '480px', margin: '60px auto' }}>
             <div className="text-center" style={{ marginBottom: '32px' }}>
                 <h1 style={{ marginBottom: '8px' }}>Scan to Print</h1>
-                <p>Scan a barcode. Label prints automatically.</p>
+                <p>Scan a barcode. Label prints automatically. Search runs across all uploaded PDFs, not only today&apos;s uploads.</p>
             </div>
 
             <BarcodeInput

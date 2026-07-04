@@ -19,3 +19,17 @@ This is the local companion app for the Brady Print Station cloud application. I
 
 *   **Printer not found**: Ensure your printer is installed in your OS settings and you know its exact queue name.
 *   **Connection failed**: Ensure no firewall is blocking port 5001.
+
+## Cleanup Old Work
+
+Uploaded PDFs, barcode mappings, and print history older than one month can be removed with:
+
+```bash
+python3 cleanup_old_work.py
+```
+
+To preview the cleanup first:
+
+```bash
+python3 cleanup_old_work.py --dry-run
+```
