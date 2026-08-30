@@ -29,6 +29,17 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
 pdf_service = PDFProcessingService(upload_folder=UPLOAD_FOLDER)
 print_service = PrintService(pdf_service)
 
+def resolve_date_scope(scope, from_date=None, to_date=None):
+    """Resolve quick filters on the server so all clients share one clock."""
+    today = datetime.date.today()
+    if scope == 'today':
+        value = today.isoformat()
+        return value, value
+    if scope == 'yesterday':
+        value = (today - datetime.timedelta(days=1)).isoformat()
+        return value, value
+    return from_date, to_date
+
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok', 'message': 'Print Server is running'})
@@ -102,12 +113,24 @@ def upload_file():
     
     if file and file.filename.lower().endswith('.pdf'):
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        stem, extension = os.path.splitext(filename)
+        stored_filename = filename
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
+        if os.path.exists(filepath):
+            stored_filename = f'{stem}_{uuid.uuid4().hex[:8]}{extension}'
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], stored_filename)
         file.save(filepath)
         
         # Process PDF
         try:
             result = pdf_service.process_pdf(filepath, filename)
+
+            # A duplicate reuses the canonical PDF; discard the temporary copy.
+            if result.get('is_duplicate') and os.path.exists(filepath):
+                existing = pdf_service.documents.get(result['id'], {})
+                existing_path = pdf_service.resolve_document_path(existing)
+                if os.path.abspath(filepath) != os.path.abspath(existing_path):
+                    os.remove(filepath)
             
             if result.get('is_duplicate'):
                 pass # You can decide to treat as error or success with warning
@@ -128,10 +151,36 @@ def upload_file():
 
 @app.route('/api/documents', methods=['GET'])
 def get_documents():
-    from_date = request.args.get('from')
-    to_date = request.args.get('to')
+    scope = request.args.get('scope')
+    from_date, to_date = resolve_date_scope(
+        scope, request.args.get('from'), request.args.get('to')
+    )
     docs = pdf_service.get_all_documents(from_date=from_date, to_date=to_date)
-    return jsonify({'success': True, 'documents': docs})
+
+    search = (request.args.get('search') or '').strip().lower()
+    if search:
+        docs = [doc for doc in docs if search in (doc.get('name') or '').lower()]
+
+    total = len(docs)
+    try:
+        page = max(int(request.args.get('page', 1)), 1)
+        page_size = min(max(int(request.args.get('page_size', 100)), 1), 250)
+    except ValueError:
+        return jsonify({'error': 'page and page_size must be integers'}), 400
+
+    start = (page - 1) * page_size
+    paged_docs = docs[start:start + page_size]
+    return jsonify({
+        'success': True,
+        'documents': paged_docs,
+        'pagination': {
+            'page': page,
+            'page_size': page_size,
+            'total': total,
+            'pages': max((total + page_size - 1) // page_size, 1)
+        },
+        'date_range': {'from': from_date, 'to': to_date}
+    })
 
 @app.route('/api/documents/<file_id>', methods=['GET', 'DELETE'])
 def document_operations(file_id):
@@ -254,17 +303,17 @@ def change_user_password(username):
 def get_stats():
     """Get dashboard statistics"""
     try:
-        date_scope = request.args.get('date')
-        from_date = request.args.get('from')
-        to_date = request.args.get('to')
-
-        if date_scope == 'today':
-            today = datetime.date.today().isoformat()
-            from_date = today
-            to_date = today
+        date_scope = request.args.get('date') or request.args.get('scope')
+        from_date, to_date = resolve_date_scope(
+            date_scope, request.args.get('from'), request.args.get('to')
+        )
 
         stats = pdf_service.get_dashboard_stats(from_date=from_date, to_date=to_date)
-        return jsonify({'success': True, 'stats': stats})
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'date_range': {'from': from_date, 'to': to_date}
+        })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -367,7 +416,7 @@ def download_report():
         writer = csv.writer(output)
         
         # Header
-        writer.writerow(['Date', 'Time', 'Document', 'Barcode', 'Page', 'User', 'Printer', 'Status', 'Message'])
+        writer.writerow(['Date', 'Time', 'Document', 'Barcode', 'Unit', 'User', 'Printer', 'Status', 'Message'])
         
         # Data
         history = pdf_service.get_print_history(from_date=from_date, to_date=to_date, status=status)

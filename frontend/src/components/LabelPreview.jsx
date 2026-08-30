@@ -19,7 +19,7 @@ function LabelPreview({ mapping, previewUrl, onPrint, onCancel, isPrinting }) {
                     </div>
                     <div>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Document</div>
-                        <div>{mapping.doc_name} (Page {mapping.page_num})</div>
+                        <div>{mapping.doc_name} (Unit {mapping.page_num})</div>
                     </div>
                 </div>
 

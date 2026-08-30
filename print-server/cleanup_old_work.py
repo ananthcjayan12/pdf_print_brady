@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Remove uploaded work older than the retention window.
 
-This cleans the local JSON database and upload directory together:
+This cleans the local SQLite database and upload directory together:
 - documents older than the cutoff
 - barcode mappings that reference removed/missing documents
 - print jobs older than the cutoff or tied to removed documents
@@ -14,12 +14,14 @@ import argparse
 import datetime as dt
 import json
 import os
-import tempfile
+
+from storage import SQLiteStorage
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_UPLOAD_FOLDER = os.path.join(SCRIPT_DIR, "uploads")
-DB_FILENAME = "db.json"
+DB_FILENAME = "brady.sqlite3"
+LEGACY_DB_FILENAME = "db.json"
 
 
 def parse_timestamp(value):
@@ -39,24 +41,13 @@ def parse_timestamp(value):
             return None
 
 
-def atomic_write_json(path, data):
-    directory = os.path.dirname(path)
-    fd, temp_path = tempfile.mkstemp(prefix=".db.", suffix=".json", dir=directory)
-    try:
-        with os.fdopen(fd, "w") as handle:
-            json.dump(data, handle, indent=2)
-        os.replace(temp_path, path)
-    finally:
-        if os.path.exists(temp_path):
-            os.remove(temp_path)
-
-
 def resolve_upload_path(upload_folder, value):
     if not value:
         return None
-    if os.path.isabs(value):
+    if os.path.isabs(value) and os.path.exists(value):
         return value
-    return os.path.abspath(os.path.join(upload_folder, value))
+    filename = os.path.basename(str(value).replace("\\", "/"))
+    return os.path.abspath(os.path.join(upload_folder, filename))
 
 
 def remove_file(path, dry_run):
@@ -70,13 +61,15 @@ def remove_file(path, dry_run):
 def cleanup(upload_folder, days, dry_run):
     upload_folder = os.path.abspath(upload_folder)
     db_path = os.path.join(upload_folder, DB_FILENAME)
+    legacy_db_path = os.path.join(upload_folder, LEGACY_DB_FILENAME)
     cutoff = dt.datetime.now() - dt.timedelta(days=days)
 
-    if not os.path.exists(db_path):
-        raise FileNotFoundError(f"Database not found: {db_path}")
-
-    with open(db_path, "r") as handle:
-        data = json.load(handle)
+    storage = SQLiteStorage(db_path)
+    if storage.is_empty() and os.path.exists(legacy_db_path):
+        storage.import_legacy_json(legacy_db_path)
+    data = storage.load_all()
+    if not data.get("documents") and not data.get("print_jobs"):
+        raise FileNotFoundError(f"Database is empty: {db_path}")
 
     documents = data.get("documents", {})
     mappings = data.get("mappings", {})
@@ -129,10 +122,20 @@ def cleanup(upload_folder, days, dry_run):
             continue
         kept_print_jobs.append(job)
 
+    upload_events = data.get("upload_events", [])
+    kept_upload_events = [
+        event for event in upload_events
+        if event.get("file_id") in kept_doc_ids
+    ]
+
     orphan_files = []
     for filename in os.listdir(upload_folder):
         path = os.path.join(upload_folder, filename)
-        if filename == DB_FILENAME or not os.path.isfile(path):
+        if (
+            filename == LEGACY_DB_FILENAME
+            or filename.startswith(DB_FILENAME)
+            or not os.path.isfile(path)
+        ):
             continue
         if os.path.abspath(path) in retained_paths:
             continue
@@ -146,16 +149,18 @@ def cleanup(upload_folder, days, dry_run):
         "documents": kept_documents,
         "mappings": kept_mappings,
         "print_jobs": kept_print_jobs,
+        "upload_events": kept_upload_events,
     }
 
     if not dry_run:
-        atomic_write_json(db_path, updated)
+        storage.replace_all(updated, source="retention-cleanup")
 
     return {
         "cutoff": cutoff.isoformat(timespec="seconds"),
         "removed_documents": len(removed_doc_ids),
         "removed_mappings": len(mappings) - len(kept_mappings),
         "removed_print_jobs": removed_print_jobs,
+        "removed_upload_events": len(upload_events) - len(kept_upload_events),
         "deleted_document_files": len(deleted_files),
         "deleted_orphan_files": len(orphan_files),
         "dry_run": dry_run,

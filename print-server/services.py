@@ -2,7 +2,6 @@ import os
 import logging
 import re
 import io
-import json
 import uuid
 import pypdf
 import platform
@@ -13,6 +12,7 @@ from PIL import Image, ImageFilter, ImageEnhance
 import threading
 import datetime
 import hashlib
+from storage import SQLiteStorage
 
 # Windows-specific imports for native printing
 WINDOWS_PRINT_AVAILABLE = False
@@ -31,40 +31,113 @@ logger = logging.getLogger(__name__)
 class PDFProcessingService:
     def __init__(self, upload_folder):
         self.upload_folder = upload_folder
-        self.documents = {}  # In-memory store for now, or load from JSON
+        self.documents = {}
         self.mappings = {}   # Map barcode -> {file_id, page_num, etc}
         self.hashes = {}     # Map hash -> file_id
         self.print_jobs = [] # List of print jobs
         self.users = []      # List of user accounts
+        self.upload_events = []
         self.db_path = os.path.join(upload_folder, 'db.json')
+        self.print_journal_path = os.path.join(upload_folder, 'print_jobs.jsonl')
+        self.upload_journal_path = os.path.join(upload_folder, 'upload_events.jsonl')
+        configured_db_path = os.environ.get('BRADY_DB_PATH')
+        self.sqlite_path = configured_db_path or os.path.join(upload_folder, 'brady.sqlite3')
+        self.storage = SQLiteStorage(self.sqlite_path)
+        self._db_lock = threading.RLock()
+        self._upload_lock = threading.Lock()
         self.load_db()
+        self._rebuild_indexes()
         self.ensure_default_admin()
 
     def load_db(self):
-        if os.path.exists(self.db_path):
-            try:
-                with open(self.db_path, 'r') as f:
-                    data = json.load(f)
-                    self.documents = data.get('documents', {})
-                    self.mappings = data.get('mappings', {})
-                    self.print_jobs = data.get('print_jobs', [])
-                    self.users = data.get('users', [])
-                    # Rebuild hash map
-                    self.hashes = {doc['hash']: doc_id for doc_id, doc in self.documents.items() if 'hash' in doc}
-            except Exception as e:
-                logger.error(f"Failed to load DB: {e}")
+        if self.storage.is_empty():
+            self.storage.import_legacy_json(
+                self.db_path,
+                self.print_journal_path,
+                self.upload_journal_path,
+            )
+
+        data = self.storage.load_all()
+        self.documents = data.get('documents', {})
+        self.mappings = data.get('mappings', {})
+        self.print_jobs = data.get('print_jobs', [])
+        self.users = data.get('users', [])
+        self.upload_events = data.get('upload_events', [])
+        self.hashes = {
+            doc['hash']: doc_id
+            for doc_id, doc in self.documents.items()
+            if doc.get('hash')
+        }
+
+    def _rebuild_indexes(self):
+        """Build indexes used by every dashboard and scan request."""
+        self._mappings_by_document = {}
+        self._normalized_mappings = {}
+        for barcode, mapping in self.mappings.items():
+            self._mappings_by_document.setdefault(mapping.get('file_id'), []).append({
+                'barcode': barcode,
+                **mapping
+            })
+            normalized = self._normalize_barcode(barcode)
+            if normalized:
+                self._normalized_mappings[normalized] = barcode
+
+        for mappings in self._mappings_by_document.values():
+            mappings.sort(key=lambda item: item.get('page_num', 0))
+
+        self._printed_pages_by_document = {}
+        self._print_counts_by_document_page = {}
+        for job in self.print_jobs:
+            if job.get('status') != 'success':
+                continue
+            file_id = job.get('file_id')
+            page_num = job.get('page_num')
+            self._printed_pages_by_document.setdefault(file_id, set()).add(page_num)
+            key = (file_id, page_num)
+            self._print_counts_by_document_page[key] = self._print_counts_by_document_page.get(key, 0) + 1
+
+        self._upload_events_by_document = {}
+        for event in self.upload_events:
+            file_id = event.get('file_id')
+            if file_id in self.documents:
+                self._upload_events_by_document.setdefault(file_id, []).append(event)
+
+        # Old databases have no upload event log. Always preserve the original
+        # uploaded_at as an implicit first event, even after later re-uploads.
+        for file_id, doc in self.documents.items():
+            events = self._upload_events_by_document.setdefault(file_id, [])
+            original_timestamp = doc.get('uploaded_at')
+            if not any(event.get('timestamp') == original_timestamp for event in events):
+                events.append({
+                    'file_id': file_id,
+                    'timestamp': original_timestamp,
+                    'is_duplicate': False
+                })
+
+    def _append_upload_event(self, file_id, timestamp, is_duplicate, persist=False):
+        event = {
+            'id': str(uuid.uuid4()),
+            'file_id': file_id,
+            'timestamp': timestamp,
+            'is_duplicate': bool(is_duplicate)
+        }
+        with self._db_lock:
+            self.upload_events.append(event)
+            self._upload_events_by_document.setdefault(file_id, []).append(event)
+            if persist:
+                self.storage.insert_upload_event(event)
+        return event
 
     def save_db(self):
-        try:
-            with open(self.db_path, 'w') as f:
-                json.dump({
-                    'documents': self.documents,
-                    'mappings': self.mappings,
-                    'print_jobs': self.print_jobs,
-                    'users': self.users
-                }, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save DB: {e}")
+        """Compatibility snapshot used only by maintenance/migration tooling."""
+        with self._db_lock:
+            self.storage.replace_all({
+                'documents': self.documents,
+                'mappings': self.mappings,
+                'print_jobs': self.print_jobs,
+                'users': self.users,
+                'upload_events': self.upload_events,
+            })
 
     def ensure_default_admin(self):
         if not self.users:
@@ -75,7 +148,7 @@ class PDFProcessingService:
                     'role': 'admin'
                 }
             ]
-            self.save_db()
+            self.storage.upsert_user(self.users[0])
 
     def get_public_users(self):
         return [
@@ -96,12 +169,13 @@ class PDFProcessingService:
         if self.find_user(username):
             return False, 'Username already exists'
 
-        self.users.append({
+        user = {
             'username': username,
             'password': password,
             'role': role or 'user'
-        })
-        self.save_db()
+        }
+        self.users.append(user)
+        self.storage.upsert_user(user)
         return True, None
 
     def delete_user(self, username):
@@ -115,7 +189,7 @@ class PDFProcessingService:
                 return False, 'Cannot delete the last admin'
 
         self.users = [u for u in self.users if u.get('username') != username]
-        self.save_db()
+        self.storage.delete_user(username)
         return True, None
 
     def reset_user_password(self, username, new_password):
@@ -124,7 +198,7 @@ class PDFProcessingService:
             return False, 'User not found'
 
         user['password'] = new_password
-        self.save_db()
+        self.storage.upsert_user(user)
         return True, None
 
     def change_user_password(self, username, current_password, new_password):
@@ -136,7 +210,7 @@ class PDFProcessingService:
             return False, 'Current password is incorrect'
 
         user['password'] = new_password
-        self.save_db()
+        self.storage.upsert_user(user)
         return True, None
 
     def authenticate_user(self, username, password):
@@ -153,8 +227,16 @@ class PDFProcessingService:
         }
 
     def log_print_job(self, job_data):
-        self.print_jobs.append(job_data)
-        self.save_db()
+        with self._db_lock:
+            self.print_jobs.append(job_data)
+            if job_data.get('status') == 'success':
+                file_id = job_data.get('file_id')
+                page_num = job_data.get('page_num')
+                self._printed_pages_by_document.setdefault(file_id, set()).add(page_num)
+                key = (file_id, page_num)
+                self._print_counts_by_document_page[key] = self._print_counts_by_document_page.get(key, 0) + 1
+
+            self.storage.insert_print_job(job_data)
 
     def _parse_date(self, value):
         if not value:
@@ -202,19 +284,13 @@ class PDFProcessingService:
 
     def get_barcode_print_count(self, barcode):
         """Count how many times a barcode was printed"""
-        count = 0
-        # Find the mapping for this barcode to get file_id and page_num
         _matched, mapping = self.resolve_barcode(barcode)
         if not mapping:
             return 0
-        
-        file_id = mapping['file_id']
-        page_num = mapping['page_num']
-        
-        for job in self.print_jobs:
-            if job['file_id'] == file_id and job['page_num'] == page_num and job['status'] == 'success':
-                count += 1
-        return count
+
+        return self._print_counts_by_document_page.get(
+            (mapping.get('file_id'), mapping.get('page_num')), 0
+        )
 
     def get_last_print_for_barcode(self, barcode):
         """Get the last successful print job for a barcode"""
@@ -225,9 +301,9 @@ class PDFProcessingService:
         file_id = mapping['file_id']
         page_num = mapping['page_num']
         
-        # Sort jobs by timestamp desc and find first matching
-        sorted_jobs = sorted(self.print_jobs, key=lambda x: x['timestamp'], reverse=True)
-        for job in sorted_jobs:
+        # Jobs are appended chronologically, so a reverse scan avoids sorting the
+        # entire production history for every barcode scan.
+        for job in reversed(self.print_jobs):
             if job['file_id'] == file_id and job['page_num'] == page_num and job['status'] == 'success':
                 return {
                     'timestamp': job['timestamp'],
@@ -238,23 +314,24 @@ class PDFProcessingService:
     def get_dashboard_stats(self, from_date=None, to_date=None):
         """Get dashboard statistics, optionally filtered by date range."""
         docs = self.get_all_documents(from_date=from_date, to_date=to_date)
-        doc_ids = {doc['id'] for doc in docs}
 
         total_documents = len(docs)
         total_pages = sum(doc.get('pages', 0) for doc in docs)
 
-        # For cards we track labels/pages printed in filtered period.
+        # Print activity belongs to the selected time period regardless of when
+        # the source PDF was originally uploaded.
         jobs = self.get_print_history(from_date=from_date, to_date=to_date)
-        total_prints = len([j for j in jobs if j.get('status') == 'success' and j.get('file_id') in doc_ids])
-        failed_prints = len([j for j in jobs if j.get('status') == 'failed' and j.get('file_id') in doc_ids])
+        total_prints = sum(1 for job in jobs if job.get('status') == 'success')
+        failed_prints = sum(1 for job in jobs if job.get('status') == 'failed')
 
-        # "left" = uploaded labels/pages in range - unique printed pages for those docs
-        printed_pages = set()
-        for job in self.print_jobs:
-            if job.get('status') == 'success' and job.get('file_id') in doc_ids:
-                printed_pages.add((job.get('file_id'), job.get('page_num')))
+        # "left" is based on PDFs uploaded in the period, but a page counts as
+        # complete even if it was printed outside that period.
+        printed_pages = sum(
+            len(self._printed_pages_by_document.get(doc.get('id'), set()))
+            for doc in docs
+        )
 
-        pending_prints = max(total_pages - len(printed_pages), 0)
+        pending_prints = max(total_pages - printed_pages, 0)
 
         return {
             'total_documents': total_documents,
@@ -271,19 +348,12 @@ class PDFProcessingService:
         
         doc = self.documents[file_id]
         
-        # Get mappings for this document
-        doc_mappings = [
-            {'barcode': k, **v}
-            for k, v in self.mappings.items()
-            if v['file_id'] == file_id
-        ]
-        
-        # Count prints per page
-        page_print_counts = {}
-        for job in self.print_jobs:
-            if job['file_id'] == file_id and job['status'] == 'success':
-                page_num = job['page_num']
-                page_print_counts[page_num] = page_print_counts.get(page_num, 0) + 1
+        doc_mappings = list(self._mappings_by_document.get(file_id, []))
+        page_print_counts = {
+            page_num: count
+            for (job_file_id, page_num), count in self._print_counts_by_document_page.items()
+            if job_file_id == file_id
+        }
         
         # Calculate printed and pending
         printed_pages = set(page_print_counts.keys())
@@ -308,13 +378,33 @@ class PDFProcessingService:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
 
+    def resolve_document_path(self, document):
+        """Resolve packaged/moved databases without trusting a stale absolute path."""
+        stored_path = document.get('path', '') if document else ''
+        if stored_path and os.path.exists(stored_path):
+            return stored_path
+
+        filename = os.path.basename(stored_path.replace('\\', '/')) if stored_path else ''
+        if not filename and document:
+            filename = document.get('name', '')
+        local_path = os.path.join(self.upload_folder, filename)
+        return local_path
+
     def process_pdf(self, file_path, original_filename):
+        # Prevent concurrent uploads of the same content from racing the unique
+        # hash constraint or leaving in-memory indexes ahead of persistence.
+        with self._upload_lock:
+            return self._process_pdf_locked(file_path, original_filename)
+
+    def _process_pdf_locked(self, file_path, original_filename):
         # Calculate Hash
         file_hash = self.calculate_file_hash(file_path)
+        uploaded_at = datetime.datetime.now().isoformat()
         
         # Check for duplicates
         if file_hash in self.hashes:
             existing_id = self.hashes[file_hash]
+            self._append_upload_event(existing_id, uploaded_at, True, persist=True)
             logger.info(f"Duplicate file uploaded. Returning existing ID: {existing_id}")
             return {
                 'id': existing_id,
@@ -331,7 +421,7 @@ class PDFProcessingService:
             'id': file_id,
             'name': original_filename,
             'path': file_path,
-            'uploaded_at': datetime.datetime.now().isoformat(),
+            'uploaded_at': uploaded_at,
             'pages': 0,
             'barcodes_found': 0,
             'hash': file_hash
@@ -343,6 +433,7 @@ class PDFProcessingService:
         
         # Text Extraction Service Logic Integrated here
         text_service = TextExtractionService()
+        indexed_mappings = []
         
         for i, page in enumerate(reader.pages):
             page_num = i + 1
@@ -366,19 +457,36 @@ class PDFProcessingService:
             for serial in serials:
                 barcode = serial['text']
                 # Store mapping (normalize barcode logic if needed)
-                self.mappings[barcode] = {
+                previous_mapping = self.mappings.get(barcode)
+                if previous_mapping and previous_mapping.get('file_id') != file_id:
+                    previous_file_id = previous_mapping.get('file_id')
+                    self._mappings_by_document[previous_file_id] = [
+                        item for item in self._mappings_by_document.get(previous_file_id, [])
+                        if item.get('barcode') != barcode
+                    ]
+                mapping = {
                     'file_id': file_id,
                     'page_num': page_num,
                     'type': serial['type'],
                     'confidence': serial['confidence'],
                     'doc_name': original_filename
                 }
+                self.mappings[barcode] = mapping
+                indexed_mappings.append({'barcode': barcode, **mapping})
                 doc_info['barcodes_found'] += 1
                 logger.info(f"Found {barcode} on page {page_num}")
 
         self.documents[file_id] = doc_info
         self.hashes[file_hash] = file_id  # Store hash
-        self.save_db()
+        self._mappings_by_document[file_id] = sorted(
+            indexed_mappings, key=lambda item: item.get('page_num', 0)
+        )
+        for item in indexed_mappings:
+            normalized = self._normalize_barcode(item.get('barcode'))
+            if normalized:
+                self._normalized_mappings[normalized] = item['barcode']
+        upload_event = self._append_upload_event(file_id, uploaded_at, False)
+        self.storage.insert_document_bundle(doc_info, indexed_mappings, upload_event)
         
         return {
             'id': file_id, 
@@ -400,52 +508,82 @@ class PDFProcessingService:
             
             # Try to remove file
             try:
-                if os.path.exists(doc['path']):
-                    os.remove(doc['path'])
+                resolved_path = self.resolve_document_path(doc)
+                if os.path.exists(resolved_path):
+                    os.remove(resolved_path)
             except Exception as e:
                 logger.error(f"Error removing file: {e}")
                 
             del self.documents[file_id]
-            self.save_db()
+            self.upload_events = [
+                event for event in self.upload_events
+                if event.get('file_id') != file_id
+            ]
+            self._mappings_by_document.pop(file_id, None)
+            self._upload_events_by_document.pop(file_id, None)
+            self._printed_pages_by_document.pop(file_id, None)
+            self._print_counts_by_document_page = {
+                key: count for key, count in self._print_counts_by_document_page.items()
+                if key[0] != file_id
+            }
+            self._normalized_mappings = {
+                self._normalize_barcode(barcode): barcode
+                for barcode in self.mappings
+                if self._normalize_barcode(barcode)
+            }
+            self.storage.delete_document(file_id)
             return True
         return False
 
     def get_all_documents(self, from_date=None, to_date=None):
-        # Convert dict to sorted list
+        """Return documents filtered by server-recorded upload activity.
+
+        A duplicate upload is an activity event without creating a second PDF.
+        This makes Today/Yesterday accurate across browsers and machines.
+        """
         parsed_from = self._parse_date(from_date)
         parsed_to = self._parse_date(to_date)
 
         docs_list = []
         for doc in self.documents.values():
-            if (parsed_from or parsed_to) and not self._matches_date_range(doc.get('uploaded_at'), parsed_from, parsed_to):
+            events = self._upload_events_by_document.get(doc.get('id'), [])
+            matching_events = [
+                event for event in events
+                if not (parsed_from or parsed_to)
+                or self._matches_date_range(event.get('timestamp'), parsed_from, parsed_to)
+            ]
+            if (parsed_from or parsed_to) and not matching_events:
                 continue
 
-            printed_pages = set()
-            for job in self.print_jobs:
-                if job.get('file_id') == doc.get('id') and job.get('status') == 'success':
-                    printed_pages.add(job.get('page_num'))
+            printed_pages = self._printed_pages_by_document.get(doc.get('id'), set())
+            latest_event = max(
+                matching_events or events,
+                key=lambda event: event.get('timestamp') or ''
+            ) if (matching_events or events) else None
 
             doc_with_counts = dict(doc)
             doc_with_counts['printed_pages'] = len(printed_pages)
             doc_with_counts['left_pages'] = max(doc.get('pages', 0) - len(printed_pages), 0)
+            doc_with_counts['activity_at'] = (
+                latest_event.get('timestamp') if latest_event else doc.get('uploaded_at')
+            )
+            doc_with_counts['was_duplicate_in_range'] = any(
+                event.get('is_duplicate') for event in matching_events
+            )
             docs_list.append(doc_with_counts)
 
-        return sorted(docs_list, key=lambda x: x['uploaded_at'], reverse=True)
+        return sorted(
+            docs_list,
+            key=lambda item: item.get('activity_at') or item.get('uploaded_at') or '',
+            reverse=True
+        )
 
     def get_document_details(self, file_id):
         if file_id not in self.documents:
             return None
         
         doc = self.documents[file_id]
-        # Get all mappings for this doc
-        doc_mappings = [
-            {'barcode': k, **v} 
-            for k, v in self.mappings.items() 
-            if v['file_id'] == file_id
-        ]
-        
-        # Sort mappings by page number
-        doc_mappings.sort(key=lambda x: x['page_num'])
+        doc_mappings = list(self._mappings_by_document.get(file_id, []))
         
         return {
             'document': doc,
@@ -484,15 +622,14 @@ class PDFProcessingService:
         if not raw:
             return None, None
 
-        # Fast path: exact match by normalized key
-        for known_key in self.mappings.keys():
-            if self._normalize_barcode(known_key) == raw:
-                return known_key, self.mappings[known_key]
+        # Fast path: O(1) exact match by normalized key.
+        known_key = self._normalized_mappings.get(raw)
+        if known_key:
+            return known_key, self.mappings[known_key]
 
         # Collect partial-match candidates
         candidates = []
-        for known_key in self.mappings.keys():
-            known_norm = self._normalize_barcode(known_key)
+        for known_norm, known_key in self._normalized_mappings.items():
             if len(known_norm) < 6:
                 continue
             if known_norm in raw or raw in known_norm:
@@ -528,7 +665,10 @@ class PDFProcessingService:
         if not doc:
             raise Exception("Document not found")
             
-        return self._extract_page_bytes(doc['path'], page_num, label_settings)
+        pdf_path = self.resolve_document_path(doc)
+        if not os.path.exists(pdf_path):
+            raise Exception("PDF file is missing from the uploads folder")
+        return self._extract_page_bytes(pdf_path, page_num, label_settings)
 
     def _extract_page_bytes(self, pdf_path, page_num, label_settings=None):
         # Cropping Logic from original app (now configurable via label_settings)

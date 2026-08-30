@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Trash2, Files, RefreshCw, Barcode, Clock } from 'lucide-react';
 import { api } from '../api';
-import { getTodayUploadActivityIds, mergeDocumentsWithTodayActivity, recordUploadActivity, sortByTodayActivityThenUploadTime } from '../uploadActivity';
+
+const getLocalDate = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-${`${now.getDate()}`.padStart(2, '0')}`;
+};
 
 function UploadPage() {
     const [files, setFiles] = useState([]);
@@ -13,21 +17,32 @@ function UploadPage() {
     const [documentsStatus, setDocumentsStatus] = useState('loading');
     const [documentsMessage, setDocumentsMessage] = useState('');
     const [deletingId, setDeletingId] = useState('');
+    const [documentScope, setDocumentScope] = useState('today');
+    const [customFrom, setCustomFrom] = useState(getLocalDate());
+    const [customTo, setCustomTo] = useState(getLocalDate());
+    const [documentPage, setDocumentPage] = useState(1);
+    const [documentPagination, setDocumentPagination] = useState({ page: 1, pages: 1, total: 0 });
     const fileInputRef = useRef(null);
-    const todayActivityIds = getTodayUploadActivityIds();
 
     useEffect(() => {
         loadDocuments();
-    }, []);
+    }, [documentScope, customFrom, customTo, documentPage]);
 
     const loadDocuments = async () => {
         setDocumentsStatus('loading');
         setDocumentsMessage('');
 
         try {
-            const result = await api.getDocuments();
+            const params = { scope: documentScope, page: documentPage, pageSize: 50 };
+            if (documentScope === 'custom') {
+                delete params.scope;
+                params.from = customFrom;
+                params.to = customTo;
+            }
+            const result = await api.getDocuments(params);
             if (result.success) {
                 setDocuments(result.documents || []);
+                setDocumentPagination(result.pagination || { page: 1, pages: 1, total: result.documents?.length || 0 });
                 setDocumentsStatus('success');
                 return;
             }
@@ -104,12 +119,6 @@ function UploadPage() {
                     const result = await api.uploadFile(file);
 
                     if (result.success) {
-                        recordUploadActivity({
-                            fileId: result.file_id,
-                            name: file.name,
-                            duplicate: result.is_duplicate
-                        });
-
                         uploadedCount += 1;
                         if (result.is_duplicate) {
                             duplicateCount += 1;
@@ -184,32 +193,35 @@ function UploadPage() {
             }
 
             setResults(uploadResults);
-            await loadDocuments();
+            if (documentScope === 'today' && documentPage === 1) {
+                await loadDocuments();
+            } else {
+                setDocumentScope('today');
+                setDocumentPage(1);
+            }
         } catch {
             setStatus('error');
             setMessage('Upload failed');
         }
     };
 
-    const formatDateTime = (value) => {
-        if (!value) return 'Unknown';
-
+    const formatDate = (value) => {
         const parsed = new Date(value);
-        if (Number.isNaN(parsed.getTime())) {
-            return 'Unknown';
-        }
-
-        return parsed.toLocaleString();
+        return Number.isNaN(parsed.getTime()) ? 'Unknown' : parsed.toLocaleDateString();
     };
 
-    const documentsWithActivity = sortByTodayActivityThenUploadTime(mergeDocumentsWithTodayActivity(documents));
-    const todayDocuments = documentsWithActivity.filter((document) => todayActivityIds.includes(document.id));
+    const formatTime = (value) => {
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime())
+            ? 'Unknown'
+            : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
 
     return (
         <div style={{ maxWidth: '1120px', margin: '0 auto' }}>
             <div className="text-center" style={{ marginBottom: '40px' }}>
                 <h1 style={{ marginBottom: '12px' }}>Upload Document</h1>
-                <p>Upload a PDF containing multiple labels. Existing uploaded PDFs are shown below by default so old files can be reviewed or deleted here.</p>
+                <p>Upload one or more label PDFs, then browse today, yesterday, or any custom date range.</p>
             </div>
 
             <div className="grid" style={{ gridTemplateColumns: 'minmax(0, 1.1fr) minmax(320px, 0.9fr)', alignItems: 'start' }}>
@@ -326,7 +338,7 @@ function UploadPage() {
                                     </div>
                                     <div style={{ background: 'var(--bg-body)', padding: '20px', borderRadius: '8px' }}>
                                         <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--text-main)' }}>{stats.pages}</div>
-                                        <div className="text-muted" style={{ fontSize: '13px', fontWeight: '500', textTransform: 'uppercase' }}>Pages Processed</div>
+                                        <div className="text-muted" style={{ fontSize: '13px', fontWeight: '500', textTransform: 'uppercase' }}>Units Processed</div>
                                     </div>
                                     <div style={{ background: 'var(--bg-body)', padding: '20px', borderRadius: '8px' }}>
                                         <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--primary)' }}>{stats.barcodes}</div>
@@ -384,7 +396,7 @@ function UploadPage() {
                                 <Files size={18} color="var(--primary)" />
                                 <h2 style={{ marginBottom: 0 }}>Uploaded PDFs</h2>
                             </div>
-                            <p style={{ fontSize: '14px' }}>Old uploads are visible here by default. Today&apos;s upload activity also includes duplicate re-uploads so operators can keep working from the same file.</p>
+                            <p style={{ fontSize: '14px' }}>Browse upload activity without loading the full PDF library.</p>
                         </div>
 
                         <button
@@ -398,34 +410,61 @@ function UploadPage() {
                         </button>
                     </div>
 
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                        {[
+                            ['today', 'Today'],
+                            ['yesterday', 'Yesterday'],
+                            ['custom', 'Custom date']
+                        ].map(([value, label]) => (
+                            <button
+                                key={value}
+                                type="button"
+                                className={documentScope === value ? 'btn btn-primary' : 'btn btn-secondary'}
+                                onClick={() => {
+                                    setDocumentScope(value);
+                                    setDocumentPage(1);
+                                }}
+                                style={{ height: '34px', padding: '0 12px' }}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                        {documentScope === 'custom' && (
+                            <>
+                                <input
+                                    type="date"
+                                    className="input"
+                                    value={customFrom}
+                                    onChange={(event) => {
+                                        setCustomFrom(event.target.value);
+                                        setDocumentPage(1);
+                                    }}
+                                    aria-label="Upload date from"
+                                    style={{ width: '150px' }}
+                                />
+                                <input
+                                    type="date"
+                                    className="input"
+                                    value={customTo}
+                                    min={customFrom}
+                                    onChange={(event) => {
+                                        setCustomTo(event.target.value);
+                                        setDocumentPage(1);
+                                    }}
+                                    aria-label="Upload date to"
+                                    style={{ width: '150px' }}
+                                />
+                            </>
+                        )}
+                        <span className="status-badge" style={{ marginLeft: 'auto', background: '#f1f5f9', color: '#334155' }}>
+                            {documentPagination.total} PDF{documentPagination.total === 1 ? '' : 's'}
+                        </span>
+                    </div>
+
                     {documentsMessage && (
                         <div className="status-badge status-error" style={{ marginBottom: '16px', padding: '8px 12px' }}>
                             <AlertCircle size={14} />
                             <span>{documentsMessage}</span>
-                        </div>
-                    )}
-
-                    {todayDocuments.length > 0 && (
-                        <div style={{ marginBottom: '18px', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px', background: 'rgba(99,91,255,0.03)' }}>
-                            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-main)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                                Today&apos;s Upload Activity
-                            </div>
-                            <div style={{ display: 'grid', gap: '10px' }}>
-                                {todayDocuments.map((document) => (
-                                    <div key={`today-${document.id}`} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', background: 'white', border: '1px solid var(--border)' }}>
-                                        <div style={{ minWidth: 0 }}>
-                                            <div style={{ fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-word' }}>{document.name}</div>
-                                            <div className="text-muted" style={{ fontSize: '12px', marginTop: '4px' }}>
-                                                {document.wasDuplicateUploadToday ? 'Re-used today from existing uploads' : 'Uploaded today'}
-                                            </div>
-                                        </div>
-                                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{document.pages || 0} pages</div>
-                                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{document.barcodes_found || 0} barcodes</div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
                     )}
 
@@ -438,7 +477,7 @@ function UploadPage() {
                         </div>
                     ) : (
                         <div style={{ display: 'grid', gap: '12px', maxHeight: '780px', overflowY: 'auto', paddingRight: '4px' }}>
-                            {documentsWithActivity.map((document) => (
+                            {documents.map((document) => (
                                 <div
                                     key={document.id}
                                     style={{
@@ -455,12 +494,17 @@ function UploadPage() {
                                                 <FileText size={16} color="var(--primary)" />
                                                 <div style={{ fontWeight: 600, color: 'var(--text-main)', wordBreak: 'break-word' }}>{document.name}</div>
                                             </div>
-                                            {document.wasDuplicateUploadToday && (
+                                            {document.was_duplicate_in_range && (
                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(99,91,255,0.12)', color: 'var(--primary)', borderRadius: '999px', padding: '4px 8px', fontSize: '11px', fontWeight: 700, marginBottom: '8px' }}>
-                                                    Re-used today
+                                                    Re-uploaded in this period
                                                 </div>
                                             )}
-                                            <div className="text-muted" style={{ fontSize: '12px' }}>Uploaded {formatDateTime(document.uploaded_at)}</div>
+                                            <div className="text-muted" style={{ fontSize: '12px' }}>
+                                                Upload date: {formatDate(document.activity_at || document.uploaded_at)}
+                                            </div>
+                                            <div className="text-muted" style={{ fontSize: '12px', marginTop: '3px' }}>
+                                                Upload time: {formatTime(document.activity_at || document.uploaded_at)}
+                                            </div>
                                         </div>
 
                                         <button
@@ -479,7 +523,7 @@ function UploadPage() {
                                         <div style={{ background: 'var(--bg-body)', borderRadius: '8px', padding: '10px 12px' }}>
                                             <div className="text-muted" style={{ fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>
                                                 <Clock size={12} style={{ verticalAlign: 'text-bottom', marginRight: '4px' }} />
-                                                Pages
+                                                Units
                                             </div>
                                             <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{document.pages || 0}</div>
                                         </div>
@@ -493,13 +537,36 @@ function UploadPage() {
                                         <div style={{ background: 'var(--bg-body)', borderRadius: '8px', padding: '10px 12px' }}>
                                             <div className="text-muted" style={{ fontSize: '11px', textTransform: 'uppercase', marginBottom: '4px' }}>
                                                 <Files size={12} style={{ verticalAlign: 'text-bottom', marginRight: '4px' }} />
-                                                Left
+                                                Units Left
                                             </div>
                                             <div style={{ fontWeight: 700, color: 'var(--text-main)' }}>{document.left_pages || 0}</div>
                                         </div>
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    {documentsStatus !== 'loading' && documentPagination.pages > 1 && (
+                        <div className="flex items-center justify-between" style={{ marginTop: '14px' }}>
+                            <span className="text-muted" style={{ fontSize: '12px' }}>
+                                Page {documentPagination.page} of {documentPagination.pages}
+                            </span>
+                            <div className="flex" style={{ gap: '8px' }}>
+                                <button
+                                    className="btn btn-secondary"
+                                    disabled={documentPagination.page <= 1}
+                                    onClick={() => setDocumentPage((page) => Math.max(page - 1, 1))}
+                                >
+                                    Previous
+                                </button>
+                                <button
+                                    className="btn btn-secondary"
+                                    disabled={documentPagination.page >= documentPagination.pages}
+                                    onClick={() => setDocumentPage((page) => page + 1)}
+                                >
+                                    Next
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
 import { Scan, Upload, Printer, LayoutDashboard, Settings, LogOut } from 'lucide-react';
 import ScanPage from './pages/ScanPage';
 import UploadPage from './pages/UploadPage';
@@ -36,7 +36,6 @@ const PrivateRoute = ({ children, allowedRoles }) => {
 // Layout wrapper for protected pages
 const Layout = ({ children }) => {
   const navigate = useNavigate();
-  const location = useLocation();
 
   const session = getSession();
   const role = session?.role || 'user';

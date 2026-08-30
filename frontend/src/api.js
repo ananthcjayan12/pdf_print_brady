@@ -70,8 +70,12 @@ export const api = {
     // Dashboard APIs
     getDocuments: async (params = {}) => {
         const query = new URLSearchParams();
+        if (params.scope) query.set('scope', params.scope);
         if (params.from) query.set('from', params.from);
         if (params.to) query.set('to', params.to);
+        if (params.search) query.set('search', params.search);
+        if (params.page) query.set('page', String(params.page));
+        if (params.pageSize) query.set('page_size', String(params.pageSize));
         const queryString = query.toString();
         const url = `${getBaseUrl()}/api/documents${queryString ? `?${queryString}` : ''}`;
         const res = await axios.get(url);

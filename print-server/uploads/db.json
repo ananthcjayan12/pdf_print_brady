@@ -285,5 +285,12 @@
       "error": "LPR failed: lpr: Error - ~/.cups/lpoptions file names default destination that does not exist.\n",
       "username": "Operator-2"
     }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin",
+      "role": "admin"
+    }
   ]
 }

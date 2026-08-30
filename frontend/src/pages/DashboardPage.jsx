@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Trash2, FileText, Calendar, Barcode, Printer, Clock, CheckCircle, XCircle, Files, AlertCircle, User, Download, UserPlus, Shield } from 'lucide-react';
 import { api } from '../api';
-import { getTodayUploadActivityIds, mergeDocumentsWithTodayActivity, sortByTodayActivityThenUploadTime } from '../uploadActivity';
 
 const getTodayDateInput = () => {
     const now = new Date();
@@ -9,6 +8,20 @@ const getTodayDateInput = () => {
     const month = `${now.getMonth() + 1}`.padStart(2, '0');
     const day = `${now.getDate()}`.padStart(2, '0');
     return `${year}-${month}-${day}`;
+};
+
+const getUploadTimestamp = (document) => document.activity_at || document.uploaded_at;
+
+const formatUploadDate = (document) => {
+    const parsed = new Date(getUploadTimestamp(document));
+    return Number.isNaN(parsed.getTime()) ? 'Unknown' : parsed.toLocaleDateString();
+};
+
+const formatUploadTime = (document) => {
+    const parsed = new Date(getUploadTimestamp(document));
+    return Number.isNaN(parsed.getTime())
+        ? 'Unknown'
+        : parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
 function DashboardPage() {
@@ -21,8 +34,11 @@ function DashboardPage() {
     const [stats, setStats] = useState(null);
     const [cumulativeStats, setCumulativeStats] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [uploadDateFrom] = useState(todayDate);
-    const [uploadDateTo] = useState(todayDate);
+    const [uploadScope, setUploadScope] = useState('today');
+    const [uploadDateFrom, setUploadDateFrom] = useState(todayDate);
+    const [uploadDateTo, setUploadDateTo] = useState(todayDate);
+    const [documentPage, setDocumentPage] = useState(1);
+    const [documentPagination, setDocumentPagination] = useState({ page: 1, pages: 1, total: 0 });
     const [reportDateFrom, setReportDateFrom] = useState(todayDate);
     const [reportDateTo, setReportDateTo] = useState(todayDate);
     const [reportStatus, setReportStatus] = useState('all');
@@ -40,8 +56,9 @@ function DashboardPage() {
     }, []);
 
     useEffect(() => {
-        loadData();
-    }, [activeTab]);
+        const timeout = setTimeout(() => loadData(), activeTab === 'documents' ? 200 : 0);
+        return () => clearTimeout(timeout);
+    }, [activeTab, uploadScope, uploadDateFrom, uploadDateTo, documentPage, searchTerm]);
 
     useEffect(() => {
         if (activeTab === 'history') {
@@ -73,28 +90,22 @@ function DashboardPage() {
         setIsLoading(true);
         try {
             if (activeTab === 'documents') {
-                const todayActivityIds = getTodayUploadActivityIds();
-                const [todayData, allData] = await Promise.all([
-                    api.getDocuments({ from: uploadDateFrom, to: uploadDateTo }),
-                    todayActivityIds.length > 0 ? api.getDocuments() : Promise.resolve({ success: true, documents: [] })
-                ]);
+                const params = {
+                    scope: uploadScope,
+                    page: documentPage,
+                    pageSize: 100,
+                    search: searchTerm.trim()
+                };
+                if (uploadScope === 'custom') {
+                    params.from = uploadDateFrom;
+                    params.to = uploadDateTo;
+                    delete params.scope;
+                }
+                const data = await api.getDocuments(params);
 
-                if (todayData.success) {
-                    const todayDocs = todayData.documents || [];
-                    const allDocs = allData.success ? (allData.documents || []) : [];
-                    const mergedMap = new Map(todayDocs.map((document) => [document.id, document]));
-
-                    for (const document of allDocs) {
-                        if (todayActivityIds.includes(document.id)) {
-                            mergedMap.set(document.id, document);
-                        }
-                    }
-
-                    const mergedDocuments = sortByTodayActivityThenUploadTime(
-                        mergeDocumentsWithTodayActivity(Array.from(mergedMap.values()))
-                    );
-
-                    setDocuments(mergedDocuments);
+                if (data.success) {
+                    setDocuments(data.documents || []);
+                    setDocumentPagination(data.pagination || { page: 1, pages: 1, total: data.documents?.length || 0 });
                 }
             } else if (activeTab === 'history') {
                 const data = await api.getPrintHistory({
@@ -220,7 +231,7 @@ function DashboardPage() {
                 loadData();
                 loadStats();
                 if (selectedDoc?.document.id === id) setSelectedDoc(null);
-            } catch (error) {
+            } catch {
                 alert('Failed to delete');
             }
         }
@@ -254,20 +265,7 @@ function DashboardPage() {
         );
     };
 
-    const filteredDocuments = documents.filter((doc) => {
-        const nameMatches = doc.name?.toLowerCase().includes(searchTerm.trim().toLowerCase());
-
-        const uploadedDate = doc.uploaded_at ? new Date(doc.uploaded_at) : null;
-        const hasValidUploadDate = uploadedDate && !Number.isNaN(uploadedDate.getTime());
-
-        const fromDate = uploadDateFrom ? new Date(`${uploadDateFrom}T00:00:00`) : null;
-        const toDate = uploadDateTo ? new Date(`${uploadDateTo}T23:59:59`) : null;
-
-        const fromMatches = !fromDate || (hasValidUploadDate && uploadedDate >= fromDate);
-        const toMatches = !toDate || (hasValidUploadDate && uploadedDate <= toDate);
-
-        return nameMatches && fromMatches && toMatches;
-    });
+    const filteredDocuments = documents;
 
     const handlePrintReport = () => {
         const printWindow = window.open('', '_blank', 'width=1100,height=700');
@@ -309,7 +307,7 @@ function DashboardPage() {
                             <tr>
                                 <th>Time</th>
                                 <th>Document</th>
-                                <th>Page</th>
+                                <th>Unit</th>
                                 <th>User</th>
                                 <th>Printer</th>
                                 <th>Status</th>
@@ -352,7 +350,7 @@ function DashboardPage() {
                     </div>
                     <div style={{ fontSize: '12px', opacity: 0.85, marginTop: '6px' }}>
                         Cumulative PDFs: <strong>{cumulativeStats?.total_documents ?? '-'}</strong>
-                        {' '}| Pages: <strong>{cumulativeStats?.total_pages ?? '-'}</strong>
+                        {' '}| Units: <strong>{cumulativeStats?.total_pages ?? '-'}</strong>
                     </div>
                 </div>
 
@@ -686,16 +684,67 @@ function DashboardPage() {
 
                                 {activeTab === 'documents' && (
                                     <div style={{ padding: '20px 24px 0', marginBottom: '16px' }}>
+                                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                                            {[
+                                                ['today', 'Today'],
+                                                ['yesterday', 'Yesterday'],
+                                                ['custom', 'Custom date']
+                                            ].map(([value, label]) => (
+                                                <button
+                                                    key={value}
+                                                    type="button"
+                                                    className={uploadScope === value ? 'btn btn-primary' : 'btn btn-secondary'}
+                                                    onClick={() => {
+                                                        setUploadScope(value);
+                                                        setDocumentPage(1);
+                                                        setSelectedDoc(null);
+                                                    }}
+                                                    style={{ height: '34px', padding: '0 14px' }}
+                                                >
+                                                    {label}
+                                                </button>
+                                            ))}
+                                            {uploadScope === 'custom' && (
+                                                <>
+                                                    <input
+                                                        type="date"
+                                                        className="input"
+                                                        value={uploadDateFrom}
+                                                        onChange={(event) => {
+                                                            setUploadDateFrom(event.target.value);
+                                                            setDocumentPage(1);
+                                                        }}
+                                                        aria-label="Upload date from"
+                                                        style={{ width: '155px' }}
+                                                    />
+                                                    <input
+                                                        type="date"
+                                                        className="input"
+                                                        value={uploadDateTo}
+                                                        min={uploadDateFrom}
+                                                        onChange={(event) => {
+                                                            setUploadDateTo(event.target.value);
+                                                            setDocumentPage(1);
+                                                        }}
+                                                        aria-label="Upload date to"
+                                                        style={{ width: '155px' }}
+                                                    />
+                                                </>
+                                            )}
+                                        </div>
                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '10px' }}>
                                             <input
                                                 type="text"
                                                 className="input"
                                                 placeholder="Search uploads by file name"
                                                 value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                onChange={(e) => {
+                                                    setSearchTerm(e.target.value);
+                                                    setDocumentPage(1);
+                                                }}
                                             />
                                             <div className="status-badge" style={{ alignSelf: 'center', justifySelf: 'end', background: '#f1f5f9', color: '#334155' }}>
-                                                Showing: Today&apos;s upload activity
+                                                {documentPagination.total} PDF{documentPagination.total === 1 ? '' : 's'}
                                             </div>
                                         </div>
                                     </div>
@@ -707,8 +756,9 @@ function DashboardPage() {
                                             {activeTab === 'documents' ? (
                                                 <tr>
                                                     <th style={{ paddingLeft: '24px' }}>Name</th>
-                                                    <th>Date Uploaded</th>
-                                                    <th className="text-center">Pages</th>
+                                                    <th>Upload Date</th>
+                                                    <th>Upload Time</th>
+                                                    <th className="text-center">Units</th>
                                                     <th className="text-center">Printed</th>
                                                     <th className="text-center">Left</th>
                                                     <th style={{ paddingRight: '24px', textAlign: 'right' }}>Actions</th>
@@ -717,7 +767,7 @@ function DashboardPage() {
                                                 <tr>
                                                     <th style={{ paddingLeft: '24px' }}>Time</th>
                                                     <th>Document</th>
-                                                    <th>Barcode/Page</th>
+                                                    <th>Barcode/Unit</th>
                                                     <th>User</th>
                                                     <th>Printer</th>
                                                     <th style={{ paddingRight: '24px' }}>Status</th>
@@ -747,11 +797,17 @@ function DashboardPage() {
                                                                     <FileText size={18} color="var(--primary)" />
                                                                 </div>
                                                                 <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{doc.name}</span>
+                                                                {doc.was_duplicate_in_range && (
+                                                                    <span className="status-badge" style={{ marginLeft: '8px', background: '#eef2ff', color: '#4f46e5' }}>
+                                                                        Re-uploaded
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </td>
                                                         <td className="text-muted" style={{ fontSize: '13px' }}>
-                                                            {new Date(doc.uploaded_at).toLocaleDateString()}
+                                                            {formatUploadDate(doc)}
                                                         </td>
+                                                        <td className="text-muted" style={{ fontSize: '13px' }}>{formatUploadTime(doc)}</td>
                                                         <td className="text-center" style={{ fontFamily: 'monospaced' }}>{doc.pages}</td>
                                                         <td className="text-center" style={{ color: '#16a34a', fontWeight: 600 }}>{doc.printed_pages ?? 0}</td>
                                                         <td className="text-center" style={{ color: '#d97706', fontWeight: 600 }}>{doc.left_pages ?? doc.pages ?? 0}</td>
@@ -794,7 +850,7 @@ function DashboardPage() {
                                                             <div className="flex items-center" style={{ fontFamily: 'monospace' }}>
                                                                 <Barcode size={16} style={{ marginRight: '8px', opacity: 0.5 }} />
                                                                 <span className="status-badge" style={{ background: '#f1f5f9', color: '#64748b' }}>
-                                                                    Page {job.page_num}
+                                                                    Unit {job.page_num}
                                                                 </span>
                                                             </div>
                                                         </td>
@@ -823,7 +879,7 @@ function DashboardPage() {
                                             )}
                                             {((activeTab === 'documents' && filteredDocuments.length === 0) || (activeTab === 'history' && history.length === 0)) && (
                                                 <tr>
-                                                    <td colSpan="6" className="text-center" style={{ padding: '60px' }}>
+                                                    <td colSpan={activeTab === 'documents' ? 7 : 6} className="text-center" style={{ padding: '60px' }}>
                                                         <div style={{ color: 'var(--text-secondary)' }}>No items found.</div>
                                                     </td>
                                                 </tr>
@@ -831,6 +887,29 @@ function DashboardPage() {
                                         </tbody>
                                     </table>
                                 </div>
+                                {activeTab === 'documents' && documentPagination.pages > 1 && (
+                                    <div className="flex items-center justify-between" style={{ padding: '14px 24px', borderTop: '1px solid var(--divider)' }}>
+                                        <span className="text-muted" style={{ fontSize: '12px' }}>
+                                            Page {documentPagination.page} of {documentPagination.pages}
+                                        </span>
+                                        <div className="flex" style={{ gap: '8px' }}>
+                                            <button
+                                                className="btn btn-secondary"
+                                                disabled={documentPagination.page <= 1}
+                                                onClick={() => setDocumentPage((page) => Math.max(page - 1, 1))}
+                                            >
+                                                Previous
+                                            </button>
+                                            <button
+                                                className="btn btn-secondary"
+                                                disabled={documentPagination.page >= documentPagination.pages}
+                                                onClick={() => setDocumentPage((page) => page + 1)}
+                                            >
+                                                Next
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </>
                         )}
                     </div>
@@ -891,7 +970,7 @@ function DashboardPage() {
                                 <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <Calendar size={14} color="var(--text-secondary)" />
                                     <span className="text-muted" style={{ fontSize: '13px' }}>
-                                        Uploaded on {new Date(selectedDoc.document.uploaded_at).toLocaleDateString()}
+                                        Uploaded on {formatUploadDate(selectedDoc.document)} at {formatUploadTime(selectedDoc.document)}
                                     </span>
                                 </div>
 
@@ -929,7 +1008,7 @@ function DashboardPage() {
                                                         </div>
                                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                                                             <span style={{ fontSize: '11px', fontWeight: 600, background: '#e0e0e0', padding: '2px 6px', borderRadius: '4px' }}>
-                                                                PG {mapping.page_num}
+                                                                UNIT {mapping.page_num}
                                                             </span>
                                                             {isPrinted && (
                                                                 <span style={{

@@ -14,6 +14,17 @@ This is the local companion app for the Brady Print Station cloud application. I
 *   This server runs on `http://localhost:5001`.
 *   The cloud app (Scan & Print) sends requests to your local machine to process PDFs and send print commands.
 *   Keep this terminal open while using the app.
+*   Application data is stored in `uploads/brady.sqlite3`. On first launch, an existing `uploads/db.json` is migrated automatically.
+
+## Realistic Local Mock Data
+
+Production metadata and print history can be imported from a packaged server archive. Accounts and history usernames are sanitized, PDFs are not extracted, and the generated SQLite file is ignored by Git:
+
+```bash
+python3 import_mock_data.py /path/to/_internal.zip --replace
+```
+
+The mock login is `admin` / `admin`. Set `BRADY_DB_PATH` to use a different SQLite file.
 
 ## Troubleshooting
 

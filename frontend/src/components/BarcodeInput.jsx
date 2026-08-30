@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect } from 'react';
 
 function BarcodeInput({ value, onChange, onLookup, isLoading }) {
     const inputRef = useRef(null);

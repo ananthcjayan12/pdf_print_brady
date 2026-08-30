@@ -9,7 +9,9 @@ function LoginPage() {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [serverUrl, setServerUrl] = useState('http://10.142.190.195:5001');
+    const [serverUrl, setServerUrl] = useState(
+        () => localStorage.getItem('api_url') || 'http://10.142.190.195:5001'
+    );
 
     useEffect(() => {
         // If already logged in, redirect to home
@@ -22,22 +24,15 @@ function LoginPage() {
                 navigate('/');
             }
         }
-
-        const storedUrl = localStorage.getItem('api_url');
-        if (storedUrl) setServerUrl(storedUrl);
     }, [navigate]);
 
     const handleSaveServerUrl = async () => {
         const url = serverUrl.replace(/\/$/, "");
-        try {
-            const res = await fetch(`${url}/health`);
-            if (!res.ok) throw new Error('Server error');
-            const data = await res.json();
-            if (data.status !== 'ok') throw new Error('Invalid response');
-            localStorage.setItem('api_url', url);
-        } catch (err) {
-            throw err;
-        }
+        const res = await fetch(`${url}/health`);
+        if (!res.ok) throw new Error('Server error');
+        const data = await res.json();
+        if (data.status !== 'ok') throw new Error('Invalid response');
+        localStorage.setItem('api_url', url);
     };
 
     const handleLogin = async (e) => {

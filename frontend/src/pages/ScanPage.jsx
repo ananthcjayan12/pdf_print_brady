@@ -286,7 +286,7 @@ function ScanPage() {
                 <div className="card animate-in" style={{ marginTop: '24px', textAlign: 'center' }}>
                     <div style={{ marginBottom: '16px' }}>
                         <div style={{ fontSize: '14px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-                            Found: <strong>{scanResult.doc_name}</strong> - Page {scanResult.page_num}
+                            Found: <strong>{scanResult.doc_name}</strong> - Unit {scanResult.page_num}
                         </div>
 
                         {/* Duplicate Badge */}

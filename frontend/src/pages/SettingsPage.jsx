@@ -67,7 +67,7 @@ function SettingsPage() {
         if (storedLabel) {
             try {
                 setLabelSettings(normalizeLabelSettings(JSON.parse(storedLabel)));
-            } catch (e) {
+            } catch {
                 setLabelSettings(DEFAULT_LABEL_SETTINGS);
             }
         }
@@ -625,7 +625,7 @@ function SettingsPage() {
 
                                 {selectedDoc && (
                                     <div style={{ marginBottom: '12px' }}>
-                                        <label style={{ fontSize: '12px', fontWeight: 500 }}>Page</label>
+                                        <label style={{ fontSize: '12px', fontWeight: 500 }}>Unit</label>
                                         <input
                                             type="number"
                                             className="input"
