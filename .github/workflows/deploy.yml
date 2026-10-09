@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install Dependencies
         working-directory: ./frontend
@@ -32,10 +32,9 @@ jobs:
         run: npm run build
 
       - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: brady-print-station # You can change this to your Cloudflare project name
-          directory: ./frontend/dist
+          command: pages deploy ./frontend/dist --project-name=brady-print-station
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
